@@ -21,7 +21,7 @@
 * Flask - Python framework
 * SQLAlchemy ORM
 * PostgreSQL Database
-* Micropython
+* Micropythoná
 * WPS
 * MQTT
 
