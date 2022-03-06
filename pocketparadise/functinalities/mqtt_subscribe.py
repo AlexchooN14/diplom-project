@@ -1,16 +1,12 @@
 from paho.mqtt import client as mqtt_client
 import random
 import json
-from pocketparadise import session
-from models import Readings
 
 broker = 'localhost'
 port = 1883
 topic = "test-topic"
 # generate client ID with pub prefix randomly
 client_id = f'python-mqtt-{random.randint(0, 100)}'
-# username = 'Sasho'
-# password = '.......'
 
 
 def connect_mqtt() -> mqtt_client:
@@ -44,9 +40,9 @@ def subscribe(client: mqtt_client):
         print(sensor_type)
         reading = message.get('reading')
         print(reading)
-        table_row = Readings(sensor_type=sensor_type, reading=reading)
-        session.add(table_row)
-        session.commit()
+        # table_row = Readings(sensor_type=sensor_type, reading=reading)
+        # db_session.add(table_row)
+        # db_session.commit()
 
     client.subscribe(topic)
     client.on_message = on_message
