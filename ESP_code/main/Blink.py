@@ -6,6 +6,7 @@ import gc
 # Blinking 4   times slow - Creating AP socket
 # Blinking 1   time  fast  - Got connection to AP
 # Pulsing  2+2 times fast  - Connected to MQTT broker
+# Pulsing  2   times fast  - MQTT message
 
 
 def blink(duration, repetitions, pulse=False):

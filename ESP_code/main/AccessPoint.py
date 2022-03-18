@@ -75,11 +75,9 @@ def create_ap(ap, station):
                 uuid = auth_data[2].split('=')[1]
                 uuid = uuid.split(' ')[0]
                 print('ssid: ' + ssid + ' pass: ' + password + ' uuid: ' + uuid)
-                f = open('passwd.txt', 'w')
-                f.write(ssid + '\n')
-                f.write(password + '\n')
-                f.write(uuid)
-                f.close()
+
+                from FileManager import write_to_file
+                write_to_file('passwd.txt', ['ssid: ' + ssid, 'password: ' + password, 'uuid: ' + uuid])
                 gc.collect()
                 response = web_page("goodbye")
                 exit_flag = True

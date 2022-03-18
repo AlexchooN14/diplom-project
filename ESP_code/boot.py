@@ -29,25 +29,26 @@ if ap.active() and not station.active():
     from main.AccessPoint import create_ap
     create_ap(ap, station)
 
-from main.MQTT import last_message, message_interval, client_id, topic_pub, counter, restart_and_reconnect, connect_and_subscribe
-from main.Blink import blink
+from main.FileManager import check_file_exists
+if not check_file_exists('config.txt'):
+    from main.MQTT import discovery, discovery_sub_cb
+    discovery()
 
-try:
-    client = connect_and_subscribe()
-    blink(0.5, 2, True)  # Pulsing  2+2 times fast  - Connected to MQTT broker
-except OSError as e:
-    restart_and_reconnect()
+# try:
+#     client = connect_and_subscribe()
+#     blink(0.5, 2, True)  # Pulsing  2+2 times fast  - Connected to MQTT broker
+# except OSError as e:
+#     restart_and_reconnect()
 
-import ubinascii
-while True:
-    try:
-        client.check_msg()
-        if (time.time() - last_message) > message_interval:
-            mac = ubinascii.hexlify(network.WLAN().config('mac'), ':').decode()
-            msg = b'Hello, my MAC is %s ' % mac
-            client.publish(topic_pub, msg)
-            last_message = time.time()
-            counter += 1
-    except OSError as e:
-        restart_and_reconnect()
+# import ubinascii
+# while True:
+#     try:
+#         client.check_msg()
+#         if (time.time() - last_message) > message_interval:
+#             mac = ubinascii.hexlify(network.WLAN().config('mac'), ':').decode()
+#             msg = b'Hello, my MAC is %s ' % mac
+#             client.publish(topic_pub, msg)
+#             last_message = time.time()
+#     except OSError as e:
+#         restart_and_reconnect()
 
