@@ -74,12 +74,11 @@ def discovery():
     gc.collect()
 
     # Send them as json to topic discover/request
-    while True:
-        try:
-            client.check_msg()
-            client.publish(topic_pub, data)
-        except OSError:
-            restart_and_reconnect()
+    try:
+        client.check_msg()
+        client.publish(topic_pub, data)
+    except OSError:
+        restart_and_reconnect()
 
 
 def restart_and_reconnect():

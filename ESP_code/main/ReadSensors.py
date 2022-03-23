@@ -2,14 +2,19 @@ from machine import ADC
 import time
 
 
+soil_moisture_reset_counter = 0
+
+
 # TODO make a checker for connected pins to sensor or just rely on try/catch
 def read_soil_moisture():
+    global soil_moisture_reset_counter
+
     soil_moisture = ADC(0)
-    if not read_bme_sensor.reset_counter >= 3:
+    if not soil_moisture_reset_counter >= 3:
         try:
             soil_moisture.read()
         except:
-            read_soil_moisture.reset_counter += 1
+            soil_moisture_reset_counter += 1
             time.sleep(5)
             read_soil_moisture()
     else:
@@ -17,11 +22,11 @@ def read_soil_moisture():
         return
 
 
-read_soil_moisture.reset_counter = 0
-
-
 def read_illumination():
+    pass
 
+
+bme_reset_counter = 0
 
 
 def read_bme_sensor():
@@ -29,11 +34,13 @@ def read_bme_sensor():
     import bme680
     import gc
     gc.collect()
+
+    global bme_reset_counter
     # ESP8266 - Pin assignment
     i2c = I2C(scl=Pin(5), sda=Pin(4))
     bme = bme680.BME680_I2C(i2c=i2c)
 
-    if not read_bme_sensor.reset_counter >= 3:
+    if not bme_reset_counter >= 3:
         try:
             temp = str(round(bme.temperature, 2)) + ' C'
 
@@ -50,12 +57,9 @@ def read_bme_sensor():
             print('-------')
         except OSError as e:
             print('Failed to read sensor.')
-            read_bme_sensor.reset_counter += 1
+            bme_reset_counter += 1
             time.sleep(5)
             read_bme_sensor()
     else:
         print('Too many unsuccessful attempts. Check AIR sensor connection')
         return
-
-
-read_bme_sensor.reset_counter = 0

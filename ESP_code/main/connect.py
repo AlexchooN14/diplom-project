@@ -9,14 +9,21 @@ from Blink import blink
 import gc
 
 
-def is_wifi_connected():
+def is_wifi_enabled():  # TODO check if works
     station = network.WLAN(network.STA_IF)
-    return station.active()
+    return station.active() if station is not None else False
 
 
-def is_ap_connected():
+def is_wifi_connected():
+    print('in is wifi connected')
+    station = network.WLAN(network.STA_IF)
+    print(station.isconnected() if station is not None else False)
+    return station.isconnected() if station is not None else False
+
+
+def is_ap_enabled():  # TODO check if works
     ap = network.WLAN(network.AP_IF)
-    return ap.active()
+    return ap.active() if ap is not None else False
 
 
 def deactivate_connections():
@@ -26,29 +33,19 @@ def deactivate_connections():
     ap.active(False)
 
 
-def retry_wifi_connect(station, timer):
-    if retry_wifi_connect.reset_counter >= 3:
-        print('Too many unsuccessful attempts. Submit data again!')
-        import os
-        os.remove('passwd.txt')
-        timer.deinit()
-        gc.collect()
-        connect()
-    else:
-        retry_wifi_connect.reset_counter += 1
+reset_counter = 0
 
-
-retry_wifi_connect.reset_counter = 0
 
 ssid = None
 password = None
+
 
 def connect():
     deactivate_connections()
     global password, ssid
     print('Start connection process')
 
-    from FileManager import get_ssid, get_password, get_uuid
+    from FileManager import get_ssid, get_password
     ssid = get_ssid()
     password = get_password()
     if ssid is not None and password is not None:
@@ -61,11 +58,32 @@ def connect():
         station.active(True)
         station.connect(ssid, password)
 
-        timer_reset = Timer(1)
-        timer_reset.init(period=2000, mode=Timer.PERIODIC, callback=retry_wifi_connect(station, timer_reset))
+
+        def retry_wifi_connect(timer):  # TODO to be implementing timer for connection timeout
+            print('in retry wifi connect')
+            global reset_counter
+            if not is_wifi_connected():
+                print('in retry wifi connect if statement')
+                print("reset counter is %d" % reset_counter)
+                if reset_counter >= 4:
+                    import machine
+                    import os
+
+                    print('Too many unsuccessful attempts. Submit data again!')
+                    os.remove('passwd.txt')
+                    timer.deinit()
+                    machine.reset()
+                else:
+                    print('going to add to reset counter')
+                    reset_counter += 1
+
+        timer_reset = Timer(1)  # TODO to be implementing timer for connection timeout
+        timer_reset.init(period=20000, mode=Timer.PERIODIC, callback=retry_wifi_connect(timer_reset))
+
+
         while not station.isconnected():
             pass
-
+        timer_reset.deinit()
         print('Connection successful')
         print(station.ifconfig())
         gc.collect()
