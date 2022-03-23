@@ -25,10 +25,10 @@ def connect(callback_function):
     return client
 
 
-def sub_cb(topic, msg):
-    print((topic, msg))
-    print('ESP received hello message')
-    print(type(msg))
+# def sub_cb(topic, msg):
+#     print((topic, msg))
+#     print('ESP received hello message')
+#     print(type(msg))
 
 
 def discovery_sub_cb(topic, msg):

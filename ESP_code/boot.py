@@ -1,54 +1,29 @@
 import esp
 import gc
-import time
 import sys
-import network
 esp.osdebug(None)
 gc.collect()
 
 sys.path.append('/main')
 
-from main.connect import connect
-
-station = network.WLAN(network.STA_IF)
-ap = network.WLAN(network.AP_IF)
-station.active(False)
-ap.active(False)
+from main.connect import connect, is_ap_connected, is_wifi_connected
 
 
 connect()  # Connect to either AP or to Wi-Fi
 gc.collect()
-station = network.WLAN(network.STA_IF)
-ap = network.WLAN(network.AP_IF)
-print('ap enabled? ' + str(ap.active()))
-print('wifi enabled? ' + str(station.active()))
-print('config: ' + str(station.ifconfig()))
+print('ap enabled? ' + is_ap_connected())
+print('wifi enabled? ' + is_wifi_connected())
 
-if ap.active() and not station.active():
-    print('in ap if in boot')
+if is_ap_connected() and not is_wifi_connected():  # Check if AP connection
     from main.AccessPoint import create_ap
-    create_ap(ap, station)
+    create_ap()
 
 from main.FileManager import check_file_exists
 if not check_file_exists('config.txt'):
-    from main.MQTT import discovery, discovery_sub_cb
+    from main.MQTT import discovery
     discovery()
+else:
+    # from main.MQTT import normal_operation
+    pass
 
-# try:
-#     client = connect_and_subscribe()
-#     blink(0.5, 2, True)  # Pulsing  2+2 times fast  - Connected to MQTT broker
-# except OSError as e:
-#     restart_and_reconnect()
-
-# import ubinascii
-# while True:
-#     try:
-#         client.check_msg()
-#         if (time.time() - last_message) > message_interval:
-#             mac = ubinascii.hexlify(network.WLAN().config('mac'), ':').decode()
-#             msg = b'Hello, my MAC is %s ' % mac
-#             client.publish(topic_pub, msg)
-#             last_message = time.time()
-#     except OSError as e:
-#         restart_and_reconnect()
 

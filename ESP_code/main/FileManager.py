@@ -1,4 +1,14 @@
 
+def open_web_page(pagename):
+    if pagename == "submit":
+        file = open("main/wifi_submit.html", "r")
+    elif pagename == "goodbye":
+        file = open("main/goodbye.html", "r")
+    page = file.read()
+    file.close()
+    return page
+
+
 def check_file_exists(filename):
     try:
         open(filename, 'r')

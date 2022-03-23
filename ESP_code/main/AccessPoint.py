@@ -3,23 +3,13 @@ import time
 import gc
 import machine
 from Blink import blink
-
+from FileManager import open_web_page
 ssid = None
 password = None
 uuid = None
 
 
-def web_page(pagename):
-    if pagename == "submit":
-        file = open("main/wifi_submit.html", "r")
-    elif pagename == "goodbye":
-        file = open("main/goodbye.html", "r")
-    page = file.read()
-    file.close()
-    return page
-
-
-def create_ap(ap, station):
+def create_ap():
     print('Creating Access Point...')
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(('', 80))
@@ -60,8 +50,7 @@ def create_ap(ap, station):
                     print('route is: ' + str(route))  # Get requested route
 
                 if route == 'http://192.168.4.1/' or route is None:
-                    response = web_page("submit")
-                    route = None
+                    response = open_web_page("submit")
                     gc.collect()
 
             else:
@@ -79,7 +68,7 @@ def create_ap(ap, station):
                 from FileManager import write_to_file
                 write_to_file('passwd.txt', ['ssid: ' + ssid, 'password: ' + password, 'uuid: ' + uuid])
                 gc.collect()
-                response = web_page("goodbye")
+                response = open_web_page("goodbye")
                 exit_flag = True
 
         conn.send('HTTP/1.1 200 OK\n')
