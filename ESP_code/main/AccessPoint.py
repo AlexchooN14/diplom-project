@@ -66,7 +66,7 @@ def create_ap():
                 print('ssid: ' + ssid + ' pass: ' + password + ' uuid: ' + uuid)
 
                 from FileManager import write_to_file
-                write_to_file('passwd.txt', ['ssid: ' + ssid, 'password: ' + password, 'uuid: ' + uuid])
+                write_to_file('passwd.json', {'ssid': ssid, 'password': password, 'uuid': uuid})
                 gc.collect()
                 response = open_web_page("goodbye")
                 exit_flag = True

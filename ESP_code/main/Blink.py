@@ -7,6 +7,7 @@ import gc
 # Blinking 1   time  fast  - Got connection to AP
 # Pulsing  2+2 times fast  - Connected to MQTT broker
 # Pulsing  2   times fast  - MQTT message
+# Pulsing  2+2+2+2 times fast  - Sensor Error
 
 
 def blink(duration, repetitions, pulse=False):

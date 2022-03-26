@@ -4,24 +4,22 @@ except:
     import socket
 
 import network
-from machine import Timer
+from machine import Timer, reset
 from Blink import blink
 import gc
 
 
-def is_wifi_enabled():  # TODO check if works
+def is_wifi_enabled():
     station = network.WLAN(network.STA_IF)
     return station.active() if station is not None else False
 
 
 def is_wifi_connected():
-    print('in is wifi connected')
     station = network.WLAN(network.STA_IF)
-    print(station.isconnected() if station is not None else False)
     return station.isconnected() if station is not None else False
 
 
-def is_ap_enabled():  # TODO check if works
+def is_ap_enabled():
     ap = network.WLAN(network.AP_IF)
     return ap.active() if ap is not None else False
 
@@ -33,9 +31,28 @@ def deactivate_connections():
     ap.active(False)
 
 
-reset_counter = 0
+reset_counter_time = 0
+
+# def set_current_time():
+#     global reset_counter_time
+#     import ntptime
+#     import time
+#     ntptime.host = "1.europe.pool.ntp.org"
+#     if not reset_counter_time >= 3:
+#         try:
+#             print("Local time before synchronization: %s" % str(time.localtime()))
+#             ntptime.settime()
+#             print("Local time after synchronization: %s" % str(time.localtime()))
+#         except:
+#             print("Error syncing time")
+#             reset_counter_time += 1
+#             set_current_time()
+#     else:
+#         print('Too many unsuccessful attempts. Could not set time. Reset')
+#         reset()  # Rebooting ESP
 
 
+reset_counter_wifi = 0
 ssid = None
 password = None
 
@@ -58,35 +75,34 @@ def connect():
         station.active(True)
         station.connect(ssid, password)
 
-
-        def retry_wifi_connect(timer):  # TODO to be implementing timer for connection timeout
+        def retry_wifi_connect(t):
             print('in retry wifi connect')
-            global reset_counter
+            global reset_counter_wifi
             if not is_wifi_connected():
                 print('in retry wifi connect if statement')
-                print("reset counter is %d" % reset_counter)
-                if reset_counter >= 4:
-                    import machine
-                    import os
+                print("reset counter is %d" % reset_counter_wifi)
+                if reset_counter_wifi >= 3:
+                    from FileManager import remove_file
 
                     print('Too many unsuccessful attempts. Submit data again!')
-                    os.remove('passwd.txt')
-                    timer.deinit()
-                    machine.reset()
+                    remove_file('passwd.json')
+                    timer_reset.deinit()
+                    reset()  # Rebooting ESP
                 else:
                     print('going to add to reset counter')
-                    reset_counter += 1
+                    reset_counter_wifi += 1
 
-        timer_reset = Timer(1)  # TODO to be implementing timer for connection timeout
-        timer_reset.init(period=20000, mode=Timer.PERIODIC, callback=retry_wifi_connect(timer_reset))
-
+        timer_reset = Timer(1)
+        timer_reset.init(period=20000, mode=Timer.PERIODIC, callback=retry_wifi_connect)
 
         while not station.isconnected():
             pass
         timer_reset.deinit()
-        print('Connection successful')
-        print(station.ifconfig())
         gc.collect()
+        print('Connection successful')
+        # set_current_time()  # Setting time of ESP to current UTC time
+        gc.collect()
+        print(station.ifconfig())
         return
 
     else:
