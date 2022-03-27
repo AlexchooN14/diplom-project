@@ -11,9 +11,7 @@ _BME680_REG_CHIPID = const(0xD0)
 _BME680_BME680_COEFF_ADDR1 = const(0x89)
 _BME680_BME680_COEFF_ADDR2 = const(0xE1)
 _BME680_BME680_RES_HEAT_0 = const(0x5A)
-_BME680_BME680_GAS_WAIT_0 = const(0x64)
 _BME680_REG_SOFTRESET = const(0xE0)
-_BME680_REG_CTRL_GAS = const(0x71)
 _BME680_REG_CTRL_HUM = const(0x72)
 _BME280_REG_STATUS = const(0xF3)
 _BME680_REG_CTRL_MEAS = const(0x74)
@@ -25,7 +23,6 @@ _BME680_REG_TDATA = const(0x22)
 _BME680_REG_HDATA = const(0x25)
 _BME680_SAMPLERATES = (0, 1, 2, 4, 8, 16)
 _BME680_FILTERSIZES = (0, 1, 3, 7, 15, 31, 63, 127)
-_BME680_RUNGAS = const(0x10)
 _LOOKUP_TABLE_1 = (2147483647.0, 2147483647.0, 2147483647.0, 2147483647.0, 2147483647.0,
   2126008810.0, 2147483647.0, 2130303777.0, 2147483647.0, 2147483647.0,
   2143188679.0, 2136746228.0, 2147483647.0, 2126008810.0, 2147483647.0,
@@ -48,7 +45,6 @@ class Adafruit_BME680:
       raise RuntimeError('Failed 0x%x' % chip_id)
     self._read_calibration()
     self._write(_BME680_BME680_RES_HEAT_0, [0x73])
-    self._write(_BME680_BME680_GAS_WAIT_0, [0x65])
     self.sea_level_pressure = 1013.25
     self._pressure_oversample = 0b011
     self._temp_oversample = 0b100
@@ -57,8 +53,6 @@ class Adafruit_BME680:
     self._adc_pres = None
     self._adc_temp = None
     self._adc_hum = None
-    self._adc_gas = None
-    self._gas_range = None
     self._t_fine = None
     self._last_reading = 0
     self._min_refresh_time = 1000 / refresh_rate
@@ -150,14 +144,6 @@ class Adafruit_BME680:
   def altitude(self):
     pressure = self.pressure
     return 44330 * (1.0 - math.pow(pressure / self.sea_level_pressure, 0.1903))
-  @property
-  def gas(self):
-    self._perform_reading()
-    var1 = ((1340 + (5 * self._sw_err)) * (_LOOKUP_TABLE_1[self._gas_range])) / 65536
-    var2 = ((self._adc_gas * 32768) - 16777216) + var1
-    var3 = (_LOOKUP_TABLE_2[self._gas_range] * var1) / 512
-    calc_gas_res = (var3 + (var2 / 2)) / var2
-    return int(calc_gas_res)
   def _perform_reading(self):
     if (time.ticks_diff(self._last_reading, time.ticks_ms()) * time.ticks_diff(0, 1)
         < self._min_refresh_time):
@@ -166,7 +152,6 @@ class Adafruit_BME680:
     self._write(_BME680_REG_CTRL_MEAS,
       [(self._temp_oversample << 5)|(self._pressure_oversample << 2)])
     self._write(_BME680_REG_CTRL_HUM, [self._humidity_oversample])
-    self._write(_BME680_REG_CTRL_GAS, [_BME680_RUNGAS])
     ctrl = self._read_byte(_BME680_REG_CTRL_MEAS)
     ctrl = (ctrl & 0xFC) | 0x01
     self._write(_BME680_REG_CTRL_MEAS, [ctrl])
@@ -179,8 +164,6 @@ class Adafruit_BME680:
     self._adc_pres = _read24(data[2:5]) / 16
     self._adc_temp = _read24(data[5:8]) / 16
     self._adc_hum = struct.unpack('>H', bytes(data[8:10]))[0]
-    self._adc_gas = int(struct.unpack('>H', bytes(data[13:15]))[0] / 64)
-    self._gas_range = data[14] & 0x0F
     var1 = (self._adc_temp / 8) - (self._temp_calibration[0] * 2)
     var2 = (var1 * self._temp_calibration[1]) / 2048
     var3 = ((var1 / 2) * (var1 / 2)) / 4096
@@ -194,7 +177,6 @@ class Adafruit_BME680:
     self._temp_calibration = [coeff[x] for x in [23, 0, 1]]
     self._pressure_calibration = [coeff[x] for x in [3, 4, 5, 7, 8, 10, 9, 12, 13, 14]]
     self._humidity_calibration = [coeff[x] for x in [17, 16, 18, 19, 20, 21, 22]]
-    self._gas_calibration = [coeff[x] for x in [25, 24, 26]]
     self._humidity_calibration[1] *= 16
     self._humidity_calibration[1] += self._humidity_calibration[0] % 16
     self._humidity_calibration[0] /= 16

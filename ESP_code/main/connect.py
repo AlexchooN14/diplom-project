@@ -33,23 +33,23 @@ def deactivate_connections():
 
 reset_counter_time = 0
 
-# def set_current_time():
-#     global reset_counter_time
-#     import ntptime
-#     import time
-#     ntptime.host = "1.europe.pool.ntp.org"
-#     if not reset_counter_time >= 3:
-#         try:
-#             print("Local time before synchronization: %s" % str(time.localtime()))
-#             ntptime.settime()
-#             print("Local time after synchronization: %s" % str(time.localtime()))
-#         except:
-#             print("Error syncing time")
-#             reset_counter_time += 1
-#             set_current_time()
-#     else:
-#         print('Too many unsuccessful attempts. Could not set time. Reset')
-#         reset()  # Rebooting ESP
+def set_current_time():
+    global reset_counter_time
+    import ntptime
+    import time
+    ntptime.host = "1.europe.pool.ntp.org"
+    if not reset_counter_time >= 3:
+        try:
+            print("Local time before synchronization: %s" % str(time.localtime()))
+            ntptime.settime()
+            print("Local time after synchronization: %s" % str(time.localtime()))
+        except:
+            print("Error syncing time")
+            reset_counter_time += 1
+            set_current_time()
+    else:
+        print('Too many unsuccessful attempts. Could not set time. Reset')
+        reset()  # Rebooting ESP
 
 
 reset_counter_wifi = 0
@@ -100,7 +100,7 @@ def connect():
         timer_reset.deinit()
         gc.collect()
         print('Connection successful')
-        # set_current_time()  # Setting time of ESP to current UTC time
+        set_current_time()  # Setting time of ESP to current UTC time
         gc.collect()
         print(station.ifconfig())
         return

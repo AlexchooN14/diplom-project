@@ -33,6 +33,7 @@ def write_to_file(filename, data):
         if is_file_empty(filename):
             with open(filename, 'w') as file:
                 json.dump(data, file)
+                print('From function in FIleManager')
                 file.close()
         else:
             print('File to which I am writing is not empty')
@@ -91,5 +92,54 @@ def get_upcoming_irrigation():
         with open('config.json', 'r') as file:
             dictionary = json.load(file)
             file.close()
-            # return dictionary.get('mqtt-id')
-            # TODO get by the diagram I created
+            return dictionary['schedule-operation'][0]
+
+# {
+#   "wakeup-interval": 10,
+#   "schedule-operation": [
+#     {
+#       "start-time": "2022-03-27 11:50:00",
+#       "duration": 10
+#     },
+#     {
+#       "start-time": "2022-03-27 12:00:00",
+#       "duration": 20
+#     }
+#   ]
+# }
+
+def get_string_from_date(string):
+    (year, month, mday, hour, minute, second, weekday, yearday) = string
+    if hour < 10:
+        hour = '0' + str(hour)
+    if minute < 10:
+        minute = '0' + str(minute)
+    if second < 10:
+        second = '0' + str(second)
+    return '%s-%s-%s %s:%s:%s' % (year, month, mday, hour, minute, second)
+
+
+def get_remaining_time_irrigation(time_irrigation):
+    import time
+    time_current = list(time.localtime())
+    time_current = time_current[:-2]
+    split = time_irrigation.split(' ')
+    date_split = split[0].split('-')
+    time_split = split[1].split(':')
+    irrigation_year = int(date_split[0])
+    irrigation_month = int(date_split[1])
+    irrigation_day = int(date_split[2])
+
+    irrigation_hour = int(time_split[0])
+    irrigation_minute = int(time_split[1])
+    irrigation_second = int(time_split[2])
+
+    time_irrigation = [irrigation_year, irrigation_month, irrigation_day, irrigation_hour, irrigation_minute, irrigation_second]
+    if time_current < time_irrigation:
+        result = []
+        for current, irrigation in zip(time_current, time_irrigation):
+            result.append(irrigation - current)
+        sum = (result[0] * 31556926) + (result[1] * 2629743.83) + (result[2] * 86400) + (result[3] * 3600) + (result[4] * 60) + result[5]
+        return sum if sum >= 0 else 0
+    else:
+        return 0

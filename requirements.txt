@@ -26,3 +26,5 @@ virtualenv==20.13.1
 virtualenv-clone==0.5.7
 Werkzeug==2.0.2
 zipp==3.7.0
+
+WTForms~=3.0.1

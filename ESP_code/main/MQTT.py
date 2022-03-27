@@ -66,10 +66,9 @@ def discovery():
 
     # Get MAC, UUID of system
     mac = ubinascii.hexlify(network.WLAN().config('mac'), ':').decode()
-    uuid = get_uuid()
     dictionary = {
         "mac-address": mac,
-        "uuid": uuid
+        "uuid": get_uuid()
     }
     data = json.dumps(dictionary)
     print(data)
@@ -98,57 +97,125 @@ def normal_operation_sub_cb(topic, msg):
 
 def normal_operation():
     global client
+    start_time = 0
+    duration = 0
     mqtt_id = get_mqtt_id()
+
+    print('Memory before topics')
+    print(gc.mem_free())
+    print('---------')
     topic_configure = 'devices/' + mqtt_id + '/configure'  # Should subscribe to
     topic_ping = 'devices/' + mqtt_id + '/ping'  # Should publish to
     topic_readings = 'devices/' + mqtt_id + '/data/readings'  # Should publish to
     topic_irrigations = 'devices/' + mqtt_id + '/data/irrigations'  # Should publish to
-
+    print('Memory after topics')
+    print(gc.mem_free())
+    print('---------')
     client = connect(normal_operation_sub_cb)
     blink(0.5, 2, True)  # Pulsing  2+2 times fast  - Connected to MQTT broker
     gc.collect()
-
-    from FileManager import check_file_exists, get_upcoming_irrigation
-    if check_file_exists('config.json'):
-        irrigation_dictionary = get_upcoming_irrigation()
+    print('Memory after topic gc collect')
+    print(gc.mem_free())
+    print('---------')
 
     client.subscribe(topic_configure)
     print('Subscribed to %s topic' % topic_configure)
 
+    # -------- PING procedure --------
+    mac = ubinascii.hexlify(network.WLAN().config('mac'), ':').decode()
+    ping_dict = {
+        "mac-address": mac,
+        "uuid": get_uuid()
+    }
     try:
-        client.publish(topic_ping, {'mqtt-id': mqtt_id})  # Ping mqtt id of system to inform web app
-        sleep(10)  # TODO try an implementation with a Timer
-        client.check_msg()
+        client.publish(topic_ping, json.dumps(ping_dict))
+        sleep(5)
+        client.check_msg()  # TODO should it be wait_msg
     except OSError:
         restart_and_reconnect()
+    gc.collect()
+    # --------------------------------
+    print('Memory in NO')
+    print(gc.mem_free())
+    print('---------')
+    # -------- Component Scan procedure --------
+    # ------------------------------------------
 
-    # Save data from message to config file
-    # TODO how will component scan be implemented
-    # Read sensor data
-    # Publish sensor data
-    from ReadSensors import read_soil_moisture, read_illumination, read_bme_sensor
-    bme_reading = read_bme_sensor()
-    if bme_reading is not None:  # TODO edit after implementing sleep for fixing sensors
+    # -------- Send Readings procedure --------
+    from main.ReadSensors import return_all_sensors
+    try:
+        client.publish(topic_readings, json.dumps(return_all_sensors()))
+    except OSError:
+        restart_and_reconnect()
+    gc.collect()
+    # -----------------------------------------
+
+    # -------- Check Config File procedure --------
+    from FileManager import check_file_exists
+    if not check_file_exists('config.json'):
+        print('Config file does not exist')
+
+        def stop_wait_msg(t):
+            print('In stop wait message')
+            client.check_msg()
+            timer_reset.deinit()
+            client.disconnect()
+            client.connect(normal_operation_sub_cb)
+
+        from machine import Timer
         try:
-            client.publish(topic_readings, bme_reading)
-            sleep(5)
+            timer_reset = Timer(1)
+            timer_reset.init(period=20000, mode=Timer.ONE_SHOT, callback=stop_wait_msg)
+            print('Before wait msg from client')
+            client.wait_msg()
+            timer_reset.deinit()
         except OSError:
             restart_and_reconnect()
+    gc.collect()
+    # ---------------------------------------------
 
+    # -------- Check Time For Irrigation procedure --------
+    from main.FileManager import is_file_empty, get_upcoming_irrigation, get_remaining_time_irrigation
+    next_irrigation = None
+    if not is_file_empty('config.json'):
+        next_irrigation = get_upcoming_irrigation()
+        print(next_irrigation)
+        start_time = next_irrigation.get('start-time')
+        duration = next_irrigation.get('duration')
 
-    # Make a checker for the most soon irrigation
-    # If there is one and the time has come --> irrigation
-    # Else if there is one and the time hasn't come --> new timer, съобразен с starting period
-    #
+        remaining_seconds = get_remaining_time_irrigation(start_time)
+        print('There are ' + str(remaining_seconds) + ' seconds remaining till next irrigation')
+    else:
+        return
+    gc.collect()
+    # -----------------------------------------------------
 
-    # try:
-    #     client.check_msg()
-    #     client.publish(topic_pub, data)
-    # except OSError:
-    #     restart_and_reconnect()
+    # TODO schedule operations should have ID's
+    # TODO save schedule operation that has been managed currently
+    # TODO Sleep function to wait for the remaining_seconds time
+    # TODO Awake
+    # TODO Repeat Procedure
 
+    # TODO how will component scan be implemented
+
+    # devices/aaaa/configure
+    # {
+    #     "wakeup-interval": 10,
+    #     "schedule-operation": [
+    #         {
+    #             "id": 1,
+    #             "start-time": "2022-03-27 19:45:00",
+    #             "duration": 10
+    #         },
+    #         {
+    #             "id": 2,
+    #             "start-time": "2022-03-27 12:00:00",
+    #             "duration": 20
+    #         }
+    #     ]
+    # }
 
 def restart_and_reconnect():
-    print('Failed to connect to MQTT broker. Reconnecting...')
+    print('MQTT Failed. Reconnecting...')
     sleep(2)
     machine.reset()

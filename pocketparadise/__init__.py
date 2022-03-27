@@ -4,10 +4,14 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from flask_mail import Mail
+from paho.mqtt import client as mqtt_client
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = '01b60x1d18a79ddfasw03dxda54adf7314'
+app = Flask(__name__, template_folder='../templates')
+app.config['SECRET_KEY'] = os.environ.get('APP_SECRET_KEY')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DB_URI')
+MQTT_USERNAME = os.environ.get('MQTT_USERNAME')
+MQTT_PASSWORD = os.environ.get('MQTT_PASSWORD')
+MQTT_BROKER = os.environ.get('MQTT_BROKER')
 
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)

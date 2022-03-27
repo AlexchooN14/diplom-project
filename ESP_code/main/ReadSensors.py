@@ -1,11 +1,13 @@
 from machine import ADC, Pin
 import gc
 import time
-from Blink import blink
+from main.Blink import blink
+from main.FileManager import get_string_from_date
+from main.bme680 import *
 
-A = Pin(14, Pin.OUT)
+A = Pin(13, Pin.OUT)
 B = Pin(12, Pin.OUT)
-C = Pin(13, Pin.OUT)
+# C = Pin(14, Pin.OUT)
 
 
 soil_moisture_reset_counter = 0
@@ -21,7 +23,7 @@ def read_soil_moisture():
             # Soil Moisture Sensor is on 2nd analog input of multiplexer - A - 0; B - 1; C - 0
             A.off()
             B.on()
-            C.off()
+            # C.off()
 
             soil_moisture = ADC(0)
 
@@ -40,7 +42,7 @@ def read_soil_moisture():
         'sensor-id': 1,
         'sensor-type': 'SM',
         'reading-data': sensor_sum/3,
-        'reading-time': time.localtime()
+        'reading-time': get_string_from_date(time.localtime())
     }
     return dictionary
 
@@ -54,10 +56,10 @@ def read_illumination():
     sensor_sum = 0
     if not illumination_reset_counter >= 3:
         try:
-            # Soil Illumination Sensor is on 1st analog input of multiplexer - A - 0; B - 0; C - 1
-            A.off()
+            # Soil Illumination Sensor is on 1st analog input of multiplexer - A - 1; B - 0; C - 0
+            A.on()
             B.off()
-            C.on()
+            # C.off()
 
             illumination = ADC(0)
 
@@ -76,7 +78,7 @@ def read_illumination():
         'sensor-id': 2,
         'sensor-type': 'AL',
         'reading-data': sensor_sum / 3,
-        'reading-time': time.localtime()
+        'reading-time': get_string_from_date(time.localtime())
     }
     return dictionary
 
@@ -86,9 +88,9 @@ bme_reset_counter = 0
 def read_bme_sensor():
     from machine import I2C
     gc.collect()
-    from bme680 import BME680_I2C
-    gc.collect()
-
+    print('Memory in read bme')
+    print(gc.mem_free())
+    print('---------')
     global bme_reset_counter
     print('In bme read')
     temp_sum = 0
@@ -124,14 +126,20 @@ def read_bme_sensor():
             'humidity': hum_sum / 3,
             'pressure': pres_sum / 3
         },
-        'reading-time': time.localtime()
+        'reading-time': get_string_from_date(time.localtime())
     }
     return dictionary
 
 
 def return_all_sensors():
+    print('Memory in all sensors')
+    print(gc.mem_free())
+    print('---------')
     sm = read_soil_moisture()
-    gc.collect()
+    print(gc.mem_free())
+    print('Memory in all sensors')
+    print(gc.mem_free())
+    print('---------')
     bme = read_bme_sensor()
     gc.collect()
     illumination = read_illumination()
