@@ -53,13 +53,11 @@ def set_current_time():
 
 
 reset_counter_wifi = 0
-ssid = None
-password = None
-
 
 def connect():
     deactivate_connections()
-    global password, ssid
+    password = 0
+    ssid = 0
     print('Start connection process')
 
     from FileManager import get_ssid, get_password
@@ -103,6 +101,7 @@ def connect():
         set_current_time()  # Setting time of ESP to current UTC time
         gc.collect()
         print(station.ifconfig())
+
         return
 
     else:

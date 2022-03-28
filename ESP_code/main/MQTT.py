@@ -47,7 +47,7 @@ def discovery_sub_cb(topic, msg):
         print(type(dictionary))
         print(dictionary)
         write_to_file('passwd.json', dictionary)
-        return  # TODO should it be restart_and_reconnect
+        restart_and_reconnect()
 
 
 def discovery():
@@ -96,25 +96,25 @@ def normal_operation_sub_cb(topic, msg):
 
 
 def normal_operation():
+    print('Start of NO')
+    print(gc.mem_free())
+    print('---------')
     global client
     start_time = 0
     duration = 0
     mqtt_id = get_mqtt_id()
 
-    print('Memory before topics')
-    print(gc.mem_free())
-    print('---------')
     topic_configure = 'devices/' + mqtt_id + '/configure'  # Should subscribe to
     topic_ping = 'devices/' + mqtt_id + '/ping'  # Should publish to
     topic_readings = 'devices/' + mqtt_id + '/data/readings'  # Should publish to
     topic_irrigations = 'devices/' + mqtt_id + '/data/irrigations'  # Should publish to
-    print('Memory after topics')
+    print('After NO topics')
     print(gc.mem_free())
     print('---------')
     client = connect(normal_operation_sub_cb)
     blink(0.5, 2, True)  # Pulsing  2+2 times fast  - Connected to MQTT broker
     gc.collect()
-    print('Memory after topic gc collect')
+    print('Memory after connect gc collect')
     print(gc.mem_free())
     print('---------')
 
@@ -133,7 +133,13 @@ def normal_operation():
         client.check_msg()  # TODO should it be wait_msg
     except OSError:
         restart_and_reconnect()
+    print('Memory after NO ping')
+    print(gc.mem_free())
+    print('---------')
     gc.collect()
+    print('Memory after NO ping gc collect')
+    print(gc.mem_free())
+    print('---------')
     # --------------------------------
     print('Memory in NO')
     print(gc.mem_free())
@@ -142,12 +148,28 @@ def normal_operation():
     # ------------------------------------------
 
     # -------- Send Readings procedure --------
+    print('Memory in NO before read sensors import')
+    print(gc.mem_free())
+    print('---------')
     from main.ReadSensors import return_all_sensors
+    print('Memory in NO after read sensors import')
+    print(gc.mem_free())
+    print('---------')
+    gc.collect()
+    print('Memory in NO after read sensors import gc collect')
+    print(gc.mem_free())
+    print('---------')
     try:
         client.publish(topic_readings, json.dumps(return_all_sensors()))
     except OSError:
         restart_and_reconnect()
+    print('Memory in NO after read sensors')
+    print(gc.mem_free())
+    print('---------')
     gc.collect()
+    print('Memory in NO after read sensors gc collect')
+    print(gc.mem_free())
+    print('---------')
     # -----------------------------------------
 
     # -------- Check Config File procedure --------
