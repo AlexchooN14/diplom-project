@@ -12,10 +12,8 @@ def open_web_page(pagename):
 
 
 def is_file_empty(filename):
-    with open(filename, 'r') as file:
-        text = file.read()
-        file.close()
-    return False if text else True
+    import os
+    return True if os.stat(filename)[6] == 0 else False
 
 
 def check_file_exists(filename):
@@ -94,19 +92,31 @@ def get_upcoming_irrigation():
             file.close()
             return dictionary['schedule-operation'][0]
 
-# {
-#   "wakeup-interval": 10,
-#   "schedule-operation": [
-#     {
-#       "start-time": "2022-03-27 11:50:00",
-#       "duration": 10
-#     },
-#     {
-#       "start-time": "2022-03-27 12:00:00",
-#       "duration": 20
-#     }
-#   ]
-# }
+
+def get_wakeup_interval():
+    if check_file_exists('config.json'):
+        with open('config.json', 'r') as file:
+            dictionary = json.load(file)
+            file.close()
+            return dictionary['wakeup-interval']
+
+
+def remove_completed_irrigation():
+    if check_file_exists('config.json'):
+        if not is_file_empty('config.json'):
+            with open('config.json', 'r') as file:
+                dictionary = json.load(file)
+                file.close()
+                try:
+                    del dictionary['schedule-operation'][0]
+                except:
+                    print('No more schedules or no such key. Deleting config')
+                    remove_file('config.json')
+                    return
+            with open('config.json', 'w') as file:
+                json.dump(dictionary, file)
+                file.close()
+
 
 def get_string_from_date(string):
     (year, month, mday, hour, minute, second, weekday, yearday) = string

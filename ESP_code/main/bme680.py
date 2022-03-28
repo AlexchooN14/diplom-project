@@ -1,9 +1,8 @@
 # Spaces, comments and some functions have been removed from the original file to save memory
 # Original source: https://github.com/adafruit/Adafruit_CircuitPython_BME680/blob/master/adafruit_bme680.py
-import time
-import math
+from time import sleep, ticks_ms, ticks_diff
+from math import pow
 from micropython import const
-from ubinascii import hexlify as hex
 try:
   import struct
 except ImportError:
@@ -44,7 +43,7 @@ def _read24(arr):
 class Adafruit_BME680:
   def __init__(self, *, refresh_rate=10):
     self._write(_BME680_REG_SOFTRESET, [0xB6])
-    time.sleep(0.005)
+    sleep(0.005)
     chip_id = self._read_byte(_BME680_REG_CHIPID)
     if chip_id != _BME680_CHIPID:
       raise RuntimeError('Failed 0x%x' % chip_id)
@@ -151,7 +150,7 @@ class Adafruit_BME680:
   @property
   def altitude(self):
     pressure = self.pressure
-    return 44330 * (1.0 - math.pow(pressure / self.sea_level_pressure, 0.1903))
+    return 44330 * (1.0 - pow(pressure / self.sea_level_pressure, 0.1903))
   @property
   def gas(self):
     self._perform_reading()
@@ -161,7 +160,7 @@ class Adafruit_BME680:
     calc_gas_res = (var3 + (var2 / 2)) / var2
     return int(calc_gas_res)
   def _perform_reading(self):
-    if (time.ticks_diff(self._last_reading, time.ticks_ms()) * time.ticks_diff(0, 1)
+    if (ticks_diff(self._last_reading, ticks_ms()) * ticks_diff(0, 1)
         < self._min_refresh_time):
       return
     self._write(_BME680_REG_CONFIG, [self._filter << 2])
@@ -176,8 +175,8 @@ class Adafruit_BME680:
     while not new_data:
       data = self._read(_BME680_REG_MEAS_STATUS, 15)
       new_data = data[0] & 0x80 != 0
-      time.sleep(0.005)
-    self._last_reading = time.ticks_ms()
+      sleep(0.005)
+    self._last_reading = ticks_ms()
     self._adc_pres = _read24(data[2:5]) / 16
     self._adc_temp = _read24(data[5:8]) / 16
     self._adc_hum = struct.unpack('>H', bytes(data[8:10]))[0]

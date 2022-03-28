@@ -1,9 +1,9 @@
 from machine import ADC, Pin
 import gc
 import time
-from main.Blink import blink
-from main.FileManager import get_string_from_date
-from main.bme680 import BME680_I2C
+from Blink import blink
+from FileManager import get_string_from_date
+from bme680 import BME680_I2C
 
 A = Pin(13, Pin.OUT)
 B = Pin(12, Pin.OUT)
@@ -99,9 +99,9 @@ def read_bme_sensor():
 
     if not bme_reset_counter >= 3:
         try:
-            i2c = I2C(scl=Pin(5), sda=Pin(4))
+            # i2c = I2C(scl=Pin(5), sda=Pin(4))
             # ESP32 - Pin assignment
-            # i2c = I2C(1, scl=Pin(22), sda=Pin(21))
+            i2c = I2C(1, scl=Pin(22), sda=Pin(21))
             bme = BME680_I2C(i2c=i2c)
 
             for i in range(3):
@@ -134,16 +134,20 @@ def read_bme_sensor():
 
 
 def return_all_sensors():
-    print('Memory in all sensors')
-    print(gc.mem_free())
-    print('---------')
-    sm = read_soil_moisture()
-    print(gc.mem_free())
-    print('Memory in all sensors')
-    print(gc.mem_free())
-    print('---------')
+    # print('Memory in all sensors')
+    # print(gc.mem_free())
+    # print('---------')
+    # sm = read_soil_moisture()
+    # print(sm)
+    # print(gc.mem_free())
+    # print('Memory in all sensors')
+    # print(gc.mem_free())
+    # print('---------')
     bme = read_bme_sensor()
+    print(bme)
     gc.collect()
-    illumination = read_illumination()
-    gc.collect()
-    return [sm, bme, illumination] if sm and bme and illumination else None
+    # illumination = read_illumination()
+    # print(illumination)
+    # gc.collect()
+    # return [sm, bme, illumination] if sm and bme and illumination else None
+    return [bme] if bme else None
