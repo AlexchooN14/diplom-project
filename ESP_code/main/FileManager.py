@@ -31,7 +31,6 @@ def write_to_file(filename, data):
         if is_file_empty(filename):
             with open(filename, 'w') as file:
                 json.dump(data, file)
-                print('From function in FIleManager')
                 file.close()
         else:
             print('File to which I am writing is not empty')

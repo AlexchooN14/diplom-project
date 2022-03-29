@@ -19,17 +19,21 @@ del ubinascii, unique_id, network
 
 
 connect_reset_counter = 0
+message_checker_bool = False
 
-def connect(callback_function):
-    from umqttsimple import MQTTClient
-    global client, client_id, mqtt_server, username, password, connect_reset_counter
-
+def start_message_checker():
     import _thread
     def message_checker():
-        while client.get_connected():
+        while message_checker_bool:
             client.check_msg()
             print('Message checker')
             sleep(1)
+    _thread.start_new_thread(message_checker, ())
+
+
+def connect(callback_function):
+    from umqttsimple import MQTTClient
+    global client, client_id, mqtt_server, username, password, connect_reset_counter, message_checker_bool
 
     if not connect_reset_counter >= 3:
         try:
@@ -37,12 +41,14 @@ def connect(callback_function):
             del MQTTClient
             client.set_callback(callback_function)
             client.connect()
+            message_checker_bool = True
             print('Connected to %s MQTT broker' % mqtt_server)
-            _thread.start_new_thread(message_checker, ())
+            start_message_checker()  # Start thread for message checking
             gc.collect()
             return client
         except OSError:
             connect_reset_counter += 1
+            message_checker_bool = False
             client.disconnect()
             client.connect(callback_function)
     else:
@@ -66,7 +72,7 @@ def discovery_sub_cb(topic, msg):
 
 
 def discovery():
-    global client
+    global client, message_checker_bool
     topic_sub = 'discover/response'
     topic_pub = 'discover/request'
 
@@ -91,13 +97,14 @@ def discovery():
     # Send them as json to topic discover/request
     try:
         client.publish(topic_pub, data)
-        # sleep(5)
-        # client.wait_msg()
         while get_mqtt_id() is None:
+            sleep(1)
             pass
     except OSError:
         restart_and_reconnect()
     del get_uuid, get_mqtt_id
+    message_checker_bool = False
+    client.disconnect()
     gc.collect()
 
 
@@ -121,7 +128,9 @@ def normal_operation_sub_cb(topic, msg):
 
 def normal_operation():
     from FileManager import get_mqtt_id, get_uuid
-    global client
+    from machine import Timer
+    from ReadSensors import return_all_sensors
+    global client, message_checker_bool
     print('Start of NO')
     print(gc.mem_free())
     print('---------')
@@ -143,20 +152,19 @@ def normal_operation():
 
     client.subscribe(topic_configure)
     print('Subscribed to %s topic' % topic_configure)
-    # client.check_msg()
-
+    gc.collect()
     # -------- PING procedure --------
     try:
         client.publish(topic_ping, json.dumps({"mac-address": mac, "uuid": uuid}))
     except OSError:
         restart_and_reconnect()
+    gc.collect()
     # --------------------------------
 
     # -------- Send Readings procedure --------
-    from ReadSensors import return_all_sensors
     try:
-        client.publish(topic_readings, json.dumps(return_all_sensors()))
-    except OSError:
+        client.publish(topic_readings, json.dumps(return_all_sensors()), qos=1)
+    except:
         restart_and_reconnect()
     gc.collect()
     # -----------------------------------------
@@ -168,13 +176,13 @@ def normal_operation():
         print('Config file does not exist')
 
         def stop_wait_msg(t):
-            print('ESP did not receive config for 20s. Going to sleep...')  # TODO implement
-            # client.stop_wait_msg()
+            print('ESP did not receive mqtt id for 20s. Going to sleep...')
             timer_reset.deinit()
             nonlocal sleep_flag
+            global message_checker_bool
             sleep_flag = True
+            message_checker_bool = False
 
-        from machine import Timer
         try:
             timer_reset = Timer(1)
             timer_reset.init(period=20000, mode=Timer.ONE_SHOT, callback=stop_wait_msg)
@@ -191,91 +199,120 @@ def normal_operation():
     # ---------------------------------------------
 
     # -------- Check Time For Irrigation procedure --------
-    from FileManager import is_file_empty, get_upcoming_irrigation, get_remaining_time_irrigation, get_wakeup_interval
+    from FileManager import get_upcoming_irrigation, get_remaining_time_irrigation, get_wakeup_interval
     from machine import deepsleep
     from time import sleep
     # next_irrigation = None
     if check_file_exists('config.json') and not is_file_empty('config.json'):
+        from time import localtime
+
         next_irrigation = get_upcoming_irrigation()
         print(next_irrigation)
 
-        # id_irrigation = next_irrigation.get('id')  # TODO save schedule operation that has been managed currently
         start_time = next_irrigation.get('start-time')
         duration = next_irrigation.get('duration')
-
-        remaining_seconds = get_remaining_time_irrigation(start_time)
         wakeup_interval = get_wakeup_interval()
+        remaining_seconds = get_remaining_time_irrigation(start_time)
+
         print('Start time is ' + str(start_time))
-        from time import localtime
         print('Current time is ' + str(localtime()))
         print('There are ' + str(remaining_seconds) + ' seconds remaining till next irrigation')
         if remaining_seconds > 0:
             if remaining_seconds < wakeup_interval:
                 # TODO sleep for remaining seconds
                 print('Im awake, but Im going to sleep for ' + str(remaining_seconds) + ' seconds')
+                message_checker_bool = False
                 sleep(5)
+                gc.collect()
                 deepsleep(remaining_seconds * 1000)
             else:
                 # TODO sleep for wakeup_interval seconds
                 print('Im awake, but Im going to sleep for ' + str(wakeup_interval) + ' wakeup interval')
+                message_checker_bool = False
                 sleep(5)
+                gc.collect()
                 deepsleep(wakeup_interval * 1000)
         else:
             stop_irrigation_flag = False
-            def get_sensors_during_irrigation(t):
-                nonlocal client, duration, wakeup_interval, stop_irrigation_flag
-                client.publish(topic_irrigations, json.dumps(return_all_sensors()))
-                if duration <= 0:
-                    timer_reset.deinit()
-                    stop_irrigation_flag = True
+            message_checker_bool = False
 
-            # begin irrigation
-            # disconnect client for 2nd thread to not work
-            client.disconnect()
+            def get_sensors_during_irrigation(t):
+                nonlocal stop_irrigation_flag, duration
+                duration -= wakeup_interval
+                client.publish(topic_irrigations, json.dumps(return_all_sensors()))
+                if duration < wakeup_interval:
+                    if duration <= 0:
+                        timer_reset.deinit()
+                        stop_irrigation_flag = True
+                    else:
+                        timer_reset.deinit()
+                        timer_reset.init(period=duration*1000, mode=Timer.PERIODIC, callback=stop_irrigation)
+            def stop_irrigation(t):
+                nonlocal stop_irrigation_flag, duration
+                duration = 0
+                timer_reset.deinit()
+                stop_irrigation_flag = True
+
             from machine import Pin
-            relay = Pin(26, Pin.OUT)  # Realy Pin for water pump
+            relay = Pin(26, Pin.OUT)  # Relay Pin for water pump
+            print('Initializing Relay Pin')
             timer_reset = Timer(1)
             if duration > wakeup_interval:
-                duration -= wakeup_interval
+                print('Timer with wakeup interval')
                 timer_reset.init(period=wakeup_interval*1000, mode=Timer.PERIODIC, callback=get_sensors_during_irrigation)
             else:
-                timer_reset.init(period=duration*1000, mode=Timer.PERIODIC, callback=get_sensors_during_irrigation)
-                duration = 0
+                timer_reset.deinit()
+                print('Timer with duration period')
+                timer_reset.init(period=duration*1000, mode=Timer.PERIODIC, callback=stop_irrigation)
+
+            from FileManager import get_string_from_date
+            irrigation_dictionary = {
+                'last-irrigation': {
+                    'duration': duration,
+                    'start-time': get_string_from_date(localtime()),
+                    'working-actuator': 1
+                }
+            }
+            # Start irrigation
+            print('Relay On')
             relay.on()
+            gc.collect()
             while not stop_irrigation_flag:
+                sleep(1)
                 pass
             relay.off()
-            # Remove done irrigation
+            print('Relay Off')
+            # Remove completed irrigation
             from FileManager import remove_completed_irrigation
+            print('Removing completed irrigation...')
             remove_completed_irrigation()
-            deepsleep(wakeup_interval)
+            # Start thread for message checking again
+            message_checker_bool = True
+            start_message_checker()
+
+            # Send sensor data again
+            print('Publish last sensors after irrigation')
+            client.publish(topic_readings, json.dumps(return_all_sensors()), qos=1)
+            print('Publish irrigation data')
+            client.publish(topic_irrigations, json.dumps(irrigation_dictionary))
+            gc.collect()
+            print('Going to sleep after irrigation with wakeup_interval: ' + str(wakeup_interval))
+            sleep(5)
+            message_checker_bool = False
+            deepsleep(wakeup_interval*1000)
     else:
         # TODO go to sleep for default time
         print('Im awake, but Im going to sleep for some time. No config received')
         sleep(5)
+        gc.collect()
         deepsleep(10000)
     gc.collect()
 
-    # devices/aaaa/configure
-    # {
-    #     "wakeup-interval": 10,
-    #     "schedule-operation": [
-    #         {
-    #             "id": 1,
-    #             "start-time": "2022-03-27 19:45:00",
-    #             "duration": 10
-    #         },
-    #         {
-    #             "id": 2,
-    #             "start-time": "2022-03-27 12:00:00",
-    #             "duration": 20
-    #         }
-    #     ]
-    # }
 
 def restart_and_reconnect():
     from machine import reset
-    print('MQTT Failed. Reconnecting...')
-    client.set_connected(False)
+    global message_checker_bool
+    print('MQTT Reconnecting...')
+    message_checker_bool = False
     sleep(2)
     reset()

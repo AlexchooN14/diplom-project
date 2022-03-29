@@ -1,15 +1,9 @@
-try:
-    import usocket as socket
-except:
-    import socket
 import ustruct as struct
-from ubinascii import hexlify
 
 class MQTTException(Exception):
     pass
 
 class MQTTClient:
-
     def __init__(self, client_id, server, port=0, user=None, password=None, keepalive=0,
                  ssl=False, ssl_params={}):
         if port == 0:
@@ -29,7 +23,6 @@ class MQTTClient:
         self.lw_msg = None
         self.lw_qos = 0
         self.lw_retain = False
-        self.is_connected = False
 
     def _send_str(self, s):
         self.sock.write(struct.pack("!H", len(s)))
@@ -57,6 +50,10 @@ class MQTTClient:
         self.lw_retain = retain
 
     def connect(self, clean_session=True):
+        try:
+            import usocket as socket
+        except:
+            import socket
         self.sock = socket.socket()
         addr = socket.getaddrinfo(self.server, self.port)[0][-1]
         self.sock.connect(addr)
@@ -101,11 +98,9 @@ class MQTTClient:
         assert resp[0] == 0x20 and resp[1] == 0x02
         if resp[3] != 0:
             raise MQTTException(resp[3])
-        self.is_connected = True
         return resp[2] & 1
 
     def disconnect(self):
-        self.is_connected = False
         self.sock.write(b"\xe0\0")
         self.sock.close()
 
@@ -202,12 +197,6 @@ class MQTTClient:
         elif op & 6 == 4:
             assert 0
 
-    def stop_wait_msg(self):
-        self.sock.setblocking(False)
-    def get_connected(self):
-        return self.is_connected
-    def set_connected(self, boolean):
-        self.is_connected = boolean
     # Checks whether a pending message from server is available.
     # If not, returns immediately with None. Otherwise, does
     # the same processing as wait_msg.
