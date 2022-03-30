@@ -86,11 +86,13 @@ def get_mqtt_id():
 
 def get_upcoming_irrigation():
     if check_file_exists('config.json'):
-        with open('config.json', 'r') as file:
-            dictionary = json.load(file)
-            file.close()
-            return dictionary['schedule-operation'][0]
-
+        if not is_file_empty('config.json'):
+            with open('config.json', 'r') as file:
+                dictionary = json.load(file)
+                print('File is: ' + str(dictionary))
+                file.close()
+                return dictionary['schedule-operation'][0]
+    return None
 
 def get_wakeup_interval():
     if check_file_exists('config.json'):
@@ -108,6 +110,10 @@ def remove_completed_irrigation():
                 file.close()
                 try:
                     del dictionary['schedule-operation'][0]
+                    if not dictionary.get('schedule-operation'):
+                        print('No more schedules or no such key. Deleting config')
+                        remove_file('config.json')
+                        return
                 except:
                     print('No more schedules or no such key. Deleting config')
                     remove_file('config.json')

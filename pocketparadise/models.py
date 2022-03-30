@@ -2,6 +2,10 @@ import enum
 from pocketparadise import db, login_manager, app
 from datetime import datetime
 from flask_login import UserMixin
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm.exc import DetachedInstanceError
+import uuid
+import typing
 
 
 @login_manager.user_loader
@@ -22,6 +26,13 @@ class METHOD(enum.Enum):
     SPREAD = "SPREAD"
 
 
+class SENSOR(enum.Enum):
+    SOIL_MOISTURE = "SOIL_MOISTURE"
+    AIR_TEMPERATURE = "AIR_TEMPERATURE"
+    AIR_HUMIDITY = "AIR_HUMIDITY"
+    AIR_PRESSURE = "AIR_PRESSURE"
+
+
 class Country(db.Model):
     __tablename__ = 'Country'
     id = db.Column(db.Integer, primary_key=True, unique=True)
@@ -36,8 +47,9 @@ class City(db.Model):
     __tablename__ = 'City'
     id = db.Column(db.Integer, primary_key=True, unique=True)
     name = db.Column(db.String(45), nullable=False, unique=True)
-    country_id = db.Column(db.Integer, db.ForeignKey('Country.id'))
+    country_id = db.Column(db.Integer, db.ForeignKey('Country.id'), nullable=False)
     users = db.relationship('User', backref='city', lazy=True)
+    zones = db.relationship('Zone', backref='city', lazy=True)
 
     def __repr__(self):
         return f'| {self.country} | {self.name}'
@@ -50,31 +62,25 @@ class User(db.Model, UserMixin):
     last_name = db.Column(db.String(30), nullable=False)
 
     email = db.Column(db.String(120), unique=True, nullable=False)
-    image_file = db.Column(db.String(35), nullable=True, default='/default/default.jpg')  # need to set default pics
+    # image_file = db.Column(db.String(35), nullable=True, default='')  # need to set default pics
     password = db.Column(db.String(60), nullable=False)
 
     created_at = db.Column(db.DateTime, nullable=False, unique=True, default=datetime.now())
     city_id = db.Column(db.Integer, db.ForeignKey('City.id'), nullable=False)
     zones = db.relationship('Zone', backref='user')  # what lazy tag should I add
 
+    def __repr__(self):
+        return f'{self.first_name} {self.last_name} from {self.city}'
 
 class Device(db.Model):
     __tablename__ = "Device"
-    id = db.Column(db.Integer, primary_key=True, unique=True)
-    mac_address = db.Column(db.String(18), nullable=False)
-    pp_uuid = db.Column(db.String(10), nullable=False)
-    mqtt_uuid = db.Column(db.String(12))
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    mac_address = db.Column(db.String(18), nullable=True)
+    pp_uuid = db.Column(db.String(10), nullable=False, unique=True)
     name = db.Column(db.String(40), nullable=False)
-    address = db.Column(db.String(40), nullable=False)
     zone_id = db.Column(db.Integer, db.ForeignKey('Zone.id'), nullable=True)  # TODO Will it work?
-    actuator_present = db.Column(db.Boolean, nullable=False, default=False)
+    actuator_present = db.Column(db.Boolean, nullable=True, default=False)
     readings = db.relationship('Reading', backref='device')
-
-
-# class UniqueID(db.Model):
-#     __tablename__ = "UniqueID"
-#     id = db.Column(db.Integer, primary_key=True, unique=True)
-#     unique_key = db.Column(db.String(40), nullable=False)
 
 
 ZonesPlants = db.Table('ZonesPlants',
@@ -88,12 +94,12 @@ class Zone(db.Model):
     id = db.Column(db.Integer, primary_key=True, unique=True)
     name = db.Column(db.String(40), nullable=False)
     devices = db.relationship('Device', backref='zone')  # what lazy tag should I add
-    address = db.Column(db.String(100), nullable=False)
-    preferred_watering_amount = db.Column(db.Float, nullable=False)  # per sq. meter per 24h
+    city_id = db.Column(db.Integer, db.ForeignKey('City.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=False)
     source_flowrate = db.Column(db.Float, nullable=False)
     area_size = db.Column(db.Float, nullable=False)
-    algorithm_id = db.Column(db.Integer, db.ForeignKey('Algorithm.id'), nullable=False)
+    irrigation_method = db.Column(db.Enum(METHOD), nullable=False)
+    watering_amount = db.Column(db.Enum(AMOUNT), nullable=True)
     schedule = db.relationship('IrrigationSchedule', backref='zone', uselist=False)  # what lazy tag should I add
     irrigation_data = db.relationship('IrrigationData', backref='zone')  # what lazy tag should I add
     plants = db.relationship('Plant', secondary=ZonesPlants, backref='zones')
@@ -107,16 +113,8 @@ class Plant(db.Model):
     sunlight_preference = db.Column(db.Enum(AMOUNT), nullable=False)
     temperature_preference = db.Column(db.Enum(AMOUNT), nullable=False)
 
-
-class WateringAlgorithm(db.Model):
-    __tablename__ = "Algorithm"
-    id = db.Column(db.Integer, primary_key=True, unique=True)
-    name = db.Column(db.String(40), nullable=False, unique=True)  # should this be unique
-    irrigation_method = db.Column(db.Enum(METHOD), unique=True)  # should this be unique
-    zones = db.relationship('Zone', backref='algorithm')  # what lazy tag should I add
-
     def __repr__(self):
-        return self.name
+        return f'{self.name} prefers {self.humidity_preference} humidity_preference, {self.sunlight_preference} sunlight_preference and {self.temperature_preference} temperature_preference.'
 
 
 class IrrigationSchedule(db.Model):
@@ -141,5 +139,7 @@ class IrrigationData(db.Model):
 class Reading(db.Model):
     __tablename__ = "Reading"
     id = db.Column(db.Integer, primary_key=True, unique=True)
+    sensor_type = db.Column(db.Enum(SENSOR), nullable=False)  # TODO implement this in the code
     read_at = db.Column(db.DateTime, nullable=False)
     device_id = db.Column(db.ForeignKey('Device.id'), nullable=False)
+    reading = db.Column(db.Float, nullable=False)

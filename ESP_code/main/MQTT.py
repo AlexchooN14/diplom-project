@@ -20,16 +20,20 @@ del ubinascii, unique_id, network
 
 connect_reset_counter = 0
 message_checker_bool = False
+message_checker_sleep = 0
 
 def start_message_checker():
     import _thread
     def message_checker():
+        global message_checker_sleep
         while message_checker_bool:
+            if message_checker_sleep != 0:
+                sleep(message_checker_sleep)
+                message_checker_sleep = 0
             client.check_msg()
             print('Message checker')
             sleep(1)
     _thread.start_new_thread(message_checker, ())
-
 
 def connect(callback_function):
     from umqttsimple import MQTTClient
@@ -61,6 +65,8 @@ def discovery_sub_cb(topic, msg):
     print((topic, msg))
     blink(0.5, 1, True)  # Pulsing  2   times fast  - MQTT message
     if topic.decode('utf-8') == 'discover/response':
+        global message_checker_sleep
+        message_checker_sleep = 4
         print('ESP received mqtt id message')
         print(type(msg))
         msg = str(msg.decode("utf-8", "ignore"))
@@ -72,14 +78,14 @@ def discovery_sub_cb(topic, msg):
 
 
 def discovery():
-    global client, message_checker_bool
+    global client, message_checker_bool, message_checker_sleep
     topic_sub = 'discover/response'
     topic_pub = 'discover/request'
 
     client = connect(discovery_sub_cb)
     blink(0.5, 2, True)  # Pulsing  2+2 times fast  - Connected to MQTT broker
     gc.collect()
-
+    message_checker_sleep = 2
     # Subscribe to discover/response
     client.subscribe(topic_sub)
     print('Subscribed to %s topic' % topic_sub)
@@ -113,7 +119,9 @@ def normal_operation_sub_cb(topic, msg):
     blink(0.5, 1, True)  # Pulsing  2   times fast  - MQTT message
     mqtt_id = get_mqtt_id()
     if topic.decode('utf-8') == 'devices/' + mqtt_id + '/configure':
+        global message_checker_sleep
         from FileManager import write_to_file
+        message_checker_sleep = 4
         print('ESP received configuration message')
         print(type(msg))
         msg = str(msg.decode("utf-8", "ignore"))
@@ -130,10 +138,7 @@ def normal_operation():
     from FileManager import get_mqtt_id, get_uuid
     from machine import Timer
     from ReadSensors import return_all_sensors
-    global client, message_checker_bool
-    print('Start of NO')
-    print(gc.mem_free())
-    print('---------')
+    global client, message_checker_bool, message_checker_sleep
     start_time = 0
     duration = 0
     mqtt_id = get_mqtt_id()
@@ -144,15 +149,14 @@ def normal_operation():
     topic_ping = 'devices/' + mqtt_id + '/ping'  # Should publish to
     topic_readings = 'devices/' + mqtt_id + '/data/readings'  # Should publish to
     topic_irrigations = 'devices/' + mqtt_id + '/data/irrigations'  # Should publish to
-    print('After NO topics')
-    print(gc.mem_free())
-    print('---------')
+
     client = connect(normal_operation_sub_cb)
     blink(0.5, 2, True)  # Pulsing  2+2 times fast  - Connected to MQTT broker
-
+    message_checker_sleep = 2
     client.subscribe(topic_configure)
     print('Subscribed to %s topic' % topic_configure)
     gc.collect()
+
     # -------- PING procedure --------
     try:
         client.publish(topic_ping, json.dumps({"mac-address": mac, "uuid": uuid}))
@@ -191,7 +195,6 @@ def normal_operation():
             while not check_file_exists('config.json') or is_file_empty('config.json'):
                 if sleep_flag:
                     break
-                pass
             timer_reset.deinit()
         except OSError:
             restart_and_reconnect()
@@ -224,17 +227,16 @@ def normal_operation():
                 message_checker_bool = False
                 sleep(5)
                 gc.collect()
-                deepsleep(remaining_seconds * 1000)
+                deepsleep(int(remaining_seconds) * 1000)
             else:
                 # TODO sleep for wakeup_interval seconds
                 print('Im awake, but Im going to sleep for ' + str(wakeup_interval) + ' wakeup interval')
                 message_checker_bool = False
                 sleep(5)
                 gc.collect()
-                deepsleep(wakeup_interval * 1000)
+                deepsleep(int(wakeup_interval) * 1000)
         else:
             stop_irrigation_flag = False
-            message_checker_bool = False
 
             def get_sensors_during_irrigation(t):
                 nonlocal stop_irrigation_flag, duration
@@ -253,8 +255,9 @@ def normal_operation():
                 timer_reset.deinit()
                 stop_irrigation_flag = True
 
+            message_checker_bool = False
             from machine import Pin
-            relay = Pin(26, Pin.OUT)  # Relay Pin for water pump
+            relay = Pin(18, Pin.OUT)  # Relay Pin for water pump
             print('Initializing Relay Pin')
             timer_reset = Timer(1)
             if duration > wakeup_interval:
@@ -275,12 +278,12 @@ def normal_operation():
             }
             # Start irrigation
             print('Relay On')
-            relay.on()
+            relay.off()
             gc.collect()
             while not stop_irrigation_flag:
                 sleep(1)
                 pass
-            relay.off()
+            relay.on()
             print('Relay Off')
             # Remove completed irrigation
             from FileManager import remove_completed_irrigation
@@ -297,11 +300,11 @@ def normal_operation():
             client.publish(topic_irrigations, json.dumps(irrigation_dictionary))
             gc.collect()
             print('Going to sleep after irrigation with wakeup_interval: ' + str(wakeup_interval))
-            sleep(5)
             message_checker_bool = False
-            deepsleep(wakeup_interval*1000)
+            sleep(5)
+            deepsleep(int(wakeup_interval)*1000)
     else:
-        # TODO go to sleep for default time
+        # Go to sleep for default time
         print('Im awake, but Im going to sleep for some time. No config received')
         sleep(5)
         gc.collect()

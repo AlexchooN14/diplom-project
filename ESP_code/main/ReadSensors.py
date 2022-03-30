@@ -5,8 +5,8 @@ from Blink import blink
 from FileManager import get_string_from_date
 from bme680 import BME680_I2C
 
-A = Pin(13, Pin.OUT)
-B = Pin(12, Pin.OUT)
+# A = Pin(13, Pin.OUT)
+# B = Pin(12, Pin.OUT)
 # C = Pin(14, Pin.OUT)
 
 
@@ -21,11 +21,11 @@ def read_soil_moisture():
     if not soil_moisture_reset_counter >= 3:
         try:
             # Soil Moisture Sensor is on 2nd analog input of multiplexer - A - 0; B - 1; C - 0
-            A.off()
-            B.on()
+            # A.off()
+            # B.on()
             # C.off()
 
-            soil_moisture = ADC(0)
+            soil_moisture = ADC(Pin(34))
 
             for i in range(3):
                 sensor_sum += soil_moisture.read()
@@ -57,11 +57,11 @@ def read_illumination():
     if not illumination_reset_counter >= 3:
         try:
             # Soil Illumination Sensor is on 1st analog input of multiplexer - A - 1; B - 0; C - 0
-            A.on()
-            B.off()
+            # A.on()
+            # B.off()
             # C.off()
 
-            illumination = ADC(0)
+            illumination = ADC(Pin(32))
 
             for i in range(3):
                 sensor_sum += illumination.read()
@@ -134,20 +134,11 @@ def read_bme_sensor():
 
 
 def return_all_sensors():
-    # print('Memory in all sensors')
-    # print(gc.mem_free())
-    # print('---------')
-    # sm = read_soil_moisture()
-    # print(sm)
-    # print(gc.mem_free())
-    # print('Memory in all sensors')
-    # print(gc.mem_free())
-    # print('---------')
+    sm = read_soil_moisture()
+    print(sm)
     bme = read_bme_sensor()
     print(bme)
     gc.collect()
-    # illumination = read_illumination()
-    # print(illumination)
-    # gc.collect()
-    # return [sm, bme, illumination] if sm and bme and illumination else None
-    return [bme] if bme else None
+    illumination = read_illumination()
+    print(illumination)
+    return [sm, bme, illumination] if sm and bme and illumination else None
