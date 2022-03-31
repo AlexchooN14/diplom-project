@@ -1,18 +1,19 @@
 import requests
-# import tkinter
-# import math
+from pocketparadise import API_KEY
 
-API_KEY = '42a3f0d8a9dc5520e3a6a1b08e93e056'
+# Get lat, lon by city name and country code
+def get_coordinates_by_name(city_name, country_code):
+    url = f'http://api.openweathermap.org/geo/1.0/direct?q={city_name},{country_code}&appid={API_KEY}'
+    response = requests.get(url).json()
+    coordinates = [response[0]['lat'], response[0]['lon']]
+    return coordinates
 
-
-def get_weather_forecast(city_name):
-    # url = f"http://api.openweathermap.org/data/2.5/weather?q={name}&appid={API_KEY}"
-    url = f'http://api.openweathermap.org/data/2.5/forecast?q={city_name}&units=metric&lang=bg&appid={API_KEY}'
-    print(url)
-
+# One call api for many current, minute, hourly, daily and alerts
+def get_weather(city_name, country_code):
+    lat, lon = get_coordinates_by_name(city_name, country_code)
+    url = f'https://api.openweathermap.org/data/2.5/onecall?lat={lat}&lon={lon}&units=metric&appid={API_KEY}'
     response = requests.get(url).json()
     return response
 
 
-def get_temperature():
-    pass
+# print(get_weather('Sofia', 'BG'))

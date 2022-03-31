@@ -1,35 +1,10 @@
 from flask import Response
-
-from pocketparadise import app, db, bcrypt, mail
-# from pocketparadise.functionalities.mqtt_connect import connect_mqtt
-from pocketparadise.functionalities.mqtt_discovery import discovery_subscribe
-from pocketparadise.functionalities.forecast import get_weather_forecast
-from pocketparadise.models import (Country, City, User, Zone, Plant, Device, IrrigationData, METHOD, AMOUNT,
-                                   ZonesPlants, IrrigationSchedule)
-from pocketparadise.forms import (RegistrationForm, LoginForm, UpdateAccountForm, ZoneForm)
+from pocketparadise import app, db, bcrypt
+from pocketparadise.models import Country, City, User, Zone, Plant, Device, ZonesPlants, IrrigationSchedule
 from flask_login import login_user, current_user, logout_user, login_required
 
-from flask import render_template, url_for, flash, redirect, request, abort, jsonify
+from flask import request, abort, jsonify
 
-def setup_cities():
-    france = Country(name='France')
-    paris = City(name='Paris', country=france)
-    cannes = City(name='Cannes', country=france)
-    lion = City(name='Lion', country=france)
-    bulgaria = Country(name='Bulgaria')
-    sofia = City(name='Sofia', country=bulgaria)
-    plovdiv = City(name='Plovdiv', country=bulgaria)
-    varna = City(name='Varna', country=bulgaria)
-    db.session.add(france)
-    db.session.add(bulgaria)
-    db.session.commit()
-    db.session.add(paris)
-    db.session.add(cannes)
-    db.session.add(lion)
-    db.session.add(sofia)
-    db.session.add(plovdiv)
-    db.session.add(varna)
-    db.session.commit()
 
 @app.route('/countries', methods=['GET', 'POST'])
 def add_country():
@@ -38,13 +13,14 @@ def add_country():
     if request.method == 'POST':
         data = request.get_json()
         country_name = data.get('country-name')
-        country = Country.query.filter_by(name=country_name).first()
+        country_code = data.get('country-code')
+        country = Country.query.filter_by(name=country_name, country_code=country_code).first()
         if country:
-            return Response(f'Country with name {country_name} already exists', 403)
-        country = Country(name=country_name)
+            return Response(f'Country with name {country_name} and code {country_code} already exists', 400)
+        country = Country(name=country_name, country_code=country_code)
         db.session.add(country)
         db.session.commit()
-        return Response(f'Country with name {country_name} added', 200)
+        return Response(f'Country {country_name},{country_code} added', 200)
     elif request.method == 'GET':
         countries = Country.query.all()
         country_list = {}
@@ -64,7 +40,7 @@ def add_city():
 
         city = City.query.filter_by(name=city_name).first()
         if city:
-            return Response(f'City with name {city_name} already exists', 403)
+            return Response(f'City with name {city_name} already exists', 400)
         city = City(name=city_name, country=country)
         db.session.add(city)
         db.session.commit()
@@ -91,7 +67,7 @@ def user():
 
         user = User.query.filter_by(email=email).first()
         if user:
-            return Response(f'User with that email already exists', 403)
+            return Response(f'User with that email already exists', 400)
 
         if first_name and last_name and email and password and city_name:
             city = City.query.filter_by(name=city_name).first()
@@ -152,7 +128,7 @@ def login():
             login_user(user, remember=remember if remember else False)
             return Response('You have successfully logged in! Time to create a zone...', 200)
         else:
-            return Response('Wrong credentials.', 401)
+            return Response('Wrong credentials.', 400)
     else:
         return Response('Missing submit data.', 400)
 
@@ -176,8 +152,6 @@ def zones():
         area_size = data.get('area-size')
         irrigation_method = data.get('irrigation-method')  # METHOD
         watering_amount = data.get('watering-amount')  # AMOUNT
-        print(f'irrigation_method: {irrigation_method}')
-        print(f'watering_amount: {watering_amount}')
 
         if request.method == 'POST':
             if name and city_name and source_flowrate\
@@ -199,7 +173,7 @@ def zones():
             new_name = data.get('new-name')
             zone = None
             if name:
-                zone = Zone.query.filter_by(user=current_user, name=name)
+                zone = Zone.query.filter_by(user=current_user, name=name).first()
                 if zone:
                     if new_name:
                         zone.name = new_name
@@ -262,7 +236,7 @@ def zone(zone_id):
     zone = Zone.query.get_or_404(zone_id)
     if zone.user == current_user:
         zone_dict = {
-            "name": zone.first_name,
+            "name": zone.name,
             "area-size": zone.area_size,
             "city-name": zone.city.name,
             "belongs-to": zone.user.first_name + ' ' + zone.user.last_name,
@@ -272,32 +246,6 @@ def zone(zone_id):
         }
         return jsonify(zone_dict)
 
-
-# @app.route('/devices', methods=['POST'])
-# @login_required
-# def device_create():
-#     # mac_adress - Nullable, pp_uuid, name, zone - nullable, actuator_present - Nullable
-#     data = request.get_json()
-#     name = data.get('name')
-#     pp_uuid = data.get('pp-uuid')
-#     actuator_present = data.get('actuator-present')
-#     zone_name = data.get('zone-name')
-#     if pp_uuid and name and zone_name:
-#         zone = Zone.query.filter_by(user=current_user, name=zone_name).first()
-#         if not zone:
-#             return Response('You don\'t have a zone with this name. Check your zones and try again.')
-#         if is_uuid_authentic(pp_uuid):
-#             if Device.query.filter_by(pp_uuid=pp_uuid).first():
-#                 return Response(f'Device with this pp-uuid was already created. Go setup your physical one', 400)
-#             device = Device(pp_uuid=pp_uuid, name=name, zone=zone,
-#                             actuator_present=bool(actuator_present) if actuator_present else False)
-#             db.session.add(device)
-#             db.session.commit()
-#             return Response(f'Your device "{name}" was created! Go setup your physical one and connect it with zone', 200)
-#         else:
-#             return Response('UUID is not valid', 400)
-#     else:
-#         return Response('Missing submit data', 400)
 
 @app.route('/devices', methods=['GET', 'PUT'])
 @login_required
@@ -352,13 +300,25 @@ def device():
     elif request.method == 'PUT':
         if request.data:
             data = request.get_json()
+            pp_uuid = data.get('pp-uuid')
             device_name = data.get('device-name')
             zone_name = data.get('zone-name')
+            actuator_present = data.get('actuator-present')
             zone = Zone.query.filter_by(name=zone_name).first_or_404()
-            device = Device.query.filter_by(name=device_name).first_or_404()
-            zone.devices.append(device)
-            db.session.commit()
-            return Response(f'You successfully connected {device_name} device with {zone_name} zone. Time to start irrigating!', 400)
+            device = Device.query.filter_by(pp_uuid=pp_uuid).first_or_404()
+
+            for d in zone.devices:
+                if d.pp_uuid == pp_uuid:
+                    return Response(f'This device is already in {zone_name} zone.', 400)
+
+            if device_name and zone_name and actuator_present and zone and device:
+                device.name = device_name
+                device.actuator_present = actuator_present
+                zone.devices.append(device)
+                db.session.commit()
+                return Response(f'You successfully connected {device_name} device with {zone_name} zone. Time to start irrigating!', 400)
+            else:
+                return Response('Missing submit data', 400)
         else:
             return Response('Missing submit data', 400)
     else:
@@ -394,6 +354,8 @@ def plants():
                 }
                 l.append(plants_dict)
             return jsonify(l)
+        else:
+            return Response(f'There aren\'t any plants added.', 400)
     elif request.method == 'PUT':
         data = request.get_json()
         name = data.get('name')
@@ -412,7 +374,7 @@ def plants():
                 db.session.commit(plant)
                 return Response(f'Data for {plant.name} changed', 200)
             else:
-                return Response('There is no such plant. You can create it with POST request', 403)
+                return Response('There is no such plant. You can create it with POST request', 400)
         else:
             return Response('Missing submit data', 400)
     else:
@@ -435,7 +397,7 @@ def zone_plant():
     else:
         return Response(f'Either zone or plant does not exist. Check twice next time!', 404)
 
-@app.route('/schedule', methods=['GET', 'POST', 'PUT'])
+@app.route('/schedule', methods=['GET', 'POST'])
 @login_required
 def schedule():
     if request.data:
@@ -461,19 +423,14 @@ def schedule():
         else:
             return Response('You should submit a zone name to get it\'s schedule. Go ahead..')
 
-    elif request.method == 'POST' or request.method == 'PUT':
+    elif request.method == 'POST':
         zone_name = data.get('zone-name')
         start_time = data.get('start-time')
         end_time = data.get('end-time')
         if zone_name and start_time and end_time:
-            zone = Zone.query.filter_by(name=zone_name).first()
+            zone = Zone.query.filter_by(name=zone_name, user=current_user).first()
             if zone:
                 if request.method == 'POST':
-                    schedule = IrrigationSchedule(start_time=start_time, end_time=end_time, zone=zone)
-                    db.session.add(schedule)
-                    db.session.commit()
-                    return Response(f'Okay. Zone schedule was set to {start_time}-{end_time}', 200)
-                elif request.method == 'PUT':
                     schedule = IrrigationSchedule.query.filter_by(zone=zone).first()
                     if schedule:
                         schedule.start_time = start_time
@@ -481,7 +438,11 @@ def schedule():
                         db.session.commit()
                         return Response(f'You changed {zone_name} zone schedule to {start_time}-{end_time}.', 200)
                     else:
-                        return Response('Sadly this zone does not have a schedule yet. Hurry up and add one.', 400)
+                        schedule = IrrigationSchedule(start_time=start_time, end_time=end_time, zone=zone)
+                        zone.schedule = schedule
+                        db.session.add(schedule)
+                        db.session.commit()
+                        return Response(f'Okay. Zone schedule was set to {start_time}-{end_time}', 200)
             else:
                 return Response('There is no such zone. You can create it with POST request on /zones', 400)
     else:
@@ -532,7 +493,7 @@ def readings():
         else:
             return Response('There is no such zone. You can create it with POST request on /zones', 400)
 
-@app.route('/irrigations')
+@app.route('/irrigations', methods=['GET'])
 @login_required
 def irrigations():
     if request.method == 'GET':
@@ -571,6 +532,7 @@ def irrigations():
                     return jsonify(d)
             else:
                 return Response('Currently you don\'t have any zones. Go create one and see what happens.', 400)
+
     else:
         return abort(403)
 
@@ -585,3 +547,50 @@ def irrigations():
 # def forecast():
 #     result = get_weather_forecast(CITY_NAME)
 #     return render_template('test1.html', forecast=result)
+
+# @app.route('/devices', methods=['POST'])
+# @login_required
+# def device_create():
+#     from .functionalities.MQTT import is_uuid_authentic
+#     # mac_adress - Nullable, pp_uuid, name, zone - nullable, actuator_present - Nullable
+#     data = request.get_json()
+#     name = data.get('name')
+#     pp_uuid = data.get('pp-uuid')
+#     actuator_present = data.get('actuator-present')
+#     zone_name = data.get('zone-name')
+#     if pp_uuid and name and zone_name:
+#         zone = Zone.query.filter_by(user=current_user, name=zone_name).first()
+#         if not zone:
+#             return Response('You don\'t have a zone with this name. Check your zones and try again.')
+#         if is_uuid_authentic(pp_uuid):
+#             if Device.query.filter_by(pp_uuid=pp_uuid).first():
+#                 return Response(f'Device with this pp-uuid was already created. Go setup your physical one', 400)
+#             device = Device(pp_uuid=pp_uuid, name=name, zone=zone,
+#                             actuator_present=bool(actuator_present) if actuator_present else False)
+#             db.session.add(device)
+#             db.session.commit()
+#             return Response(f'Your device "{name}" was created! Go setup your physical one and connect it with zone', 200)
+#         else:
+#             return Response('UUID is not valid', 400)
+#     else:
+#         return Response('Missing submit data', 400)
+
+# def setup_cities():
+#     france = Country(name='France')
+#     paris = City(name='Paris', country=france)
+#     cannes = City(name='Cannes', country=france)
+#     lion = City(name='Lion', country=france)
+#     bulgaria = Country(name='Bulgaria')
+#     sofia = City(name='Sofia', country=bulgaria)
+#     plovdiv = City(name='Plovdiv', country=bulgaria)
+#     varna = City(name='Varna', country=bulgaria)
+#     db.session.add(france)
+#     db.session.add(bulgaria)
+#     db.session.commit()
+#     db.session.add(paris)
+#     db.session.add(cannes)
+#     db.session.add(lion)
+#     db.session.add(sofia)
+#     db.session.add(plovdiv)
+#     db.session.add(varna)
+#     db.session.commit()

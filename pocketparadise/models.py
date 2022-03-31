@@ -31,12 +31,14 @@ class SENSOR(enum.Enum):
     AIR_TEMPERATURE = "AIR_TEMPERATURE"
     AIR_HUMIDITY = "AIR_HUMIDITY"
     AIR_PRESSURE = "AIR_PRESSURE"
+    LUMINANCE = "LUMINANCE"
 
 
 class Country(db.Model):
     __tablename__ = 'Country'
     id = db.Column(db.Integer, primary_key=True, unique=True)
     name = db.Column(db.String(45), nullable=False, unique=True)
+    country_code = db.Column(db.String(3), nullable=False, unique=True)
     cities = db.relationship('City', backref='country')
 
     def __repr__(self):
@@ -79,6 +81,7 @@ class Device(db.Model):
     name = db.Column(db.String(40), nullable=True)
     zone_id = db.Column(db.Integer, db.ForeignKey('Zone.id'), nullable=True)
     actuator_present = db.Column(db.Boolean, nullable=False, default=False)
+    config_present = db.Column(db.Boolean, nullable=False, default=False)
     readings = db.relationship('Reading', backref='device')
 
 
@@ -95,8 +98,8 @@ class Zone(db.Model):
     devices = db.relationship('Device', backref='zone')
     city_id = db.Column(db.Integer, db.ForeignKey('City.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=False)
-    source_flowrate = db.Column(db.Float, nullable=False)
-    area_size = db.Column(db.Float, nullable=False)
+    source_flowrate = db.Column(db.Float, nullable=False)  # liters/minute
+    area_size = db.Column(db.Float, nullable=False)  # sq. m
     irrigation_method = db.Column(db.Enum(METHOD), nullable=False)
     watering_amount = db.Column(db.Enum(AMOUNT), nullable=True)
     schedule = db.relationship('IrrigationSchedule', backref='zone', uselist=False)

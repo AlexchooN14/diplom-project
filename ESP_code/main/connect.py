@@ -1,5 +1,5 @@
 import gc
-
+from main.Blink import blink_error
 
 def is_wifi_enabled():
     import network
@@ -41,18 +41,22 @@ def set_current_time():
     global reset_counter_time
     import ntptime
     import time
+    from FileManager import get_string_from_date
+
     ntptime.host = "1.europe.pool.ntp.org"
     if not reset_counter_time >= 3:
         try:
-            print("Local time before synchronization: %s" % str(time.localtime()))
+            # print("Local time before synchronization: %s" % str(time.localtime()))
             ntptime.settime()
-            print("Local time after synchronization: %s" % str(time.localtime()))
+            print("Current UTC time: %s" % get_string_from_date(time.localtime()))
         except:
-            print("Error syncing time")
+            print("Error syncing time.")
+            blink_error()
+            time.sleep(0.5)
             reset_counter_time += 1
             set_current_time()
     else:
-        print('Too many unsuccessful attempts. Could not set time. Reset')
+        print('Too many unsuccessful attempts. Could not set time.')
         from machine import reset
         reset()  # Rebooting ESP
     del ntptime, time
@@ -64,37 +68,35 @@ reset_counter_wifi = 0
 def connect():
     import network
     from FileManager import get_ssid, get_password
-    from Blink import blink
     deactivate_connections()
-    print('Start connection process')
     ssid = get_ssid()
     password = get_password()
 
     if ssid is not None and password is not None:
         from machine import Timer
-        print('Entering connect wifi mode...')
-        print('Read values are ssid: ' + repr(str(ssid)) + ' and password: ' + repr(str(password)))
+        from main.Blink import blink_connect_wifi
 
-        blink(0.5, 3)  # Blinking 3   times fast - Device is in connect mode
+        print('Connecting to Wi-Fi...')
+        print('Read values are ssid: ' + repr(str(ssid)) + ' and password: ' + repr(str(password)))
+        blink_connect_wifi()
         station = network.WLAN(network.STA_IF)
         station.active(True)
         station.connect(ssid, password)
 
         def retry_wifi_connect(t):
             global reset_counter_wifi
-            print('in retry wifi connect')
             if not is_wifi_connected():
-                print('in retry wifi connect if statement')
-                print("reset counter is %d" % reset_counter_wifi)
+                blink_error()
                 if reset_counter_wifi >= 3:
                     from FileManager import remove_file
                     from machine import reset
-                    print('Too many unsuccessful attempts. Submit data again!')
+                    from main.Blink import blink_wrong_credentials
+                    blink_wrong_credentials()
+                    print('Too many unsuccessful attempts. Submit Wi-Fi data again!')
                     remove_file('passwd.json')
                     timer_reset.deinit()
                     reset()  # Rebooting ESP
                 else:
-                    print('going to add to reset counter')
                     reset_counter_wifi += 1
 
         timer_reset = Timer(1)
@@ -103,7 +105,7 @@ def connect():
             pass
         timer_reset.deinit()
         gc.collect()
-        print('Connection successful')
+        print('Connection to Wi-Fi successful.')
         set_current_time()  # Setting time of ESP to current UTC time
         gc.collect()
         print(station.ifconfig())
@@ -111,7 +113,7 @@ def connect():
         gc.collect()
 
     else:
-        print('Entering connect AP mode...')
+        print('Connecting in AP mode...')
         ssid = 'MicroPython-AP'
         password = 'MyPocketParadise'
 
@@ -119,15 +121,13 @@ def connect():
         ap.active(True)
         ap.config(essid=ssid, password=password)
 
-        blink(0.5, 3)  # Blinking 3   times fast - Device is in connect mode
-
         while not ap.active():
             pass
 
-        print('Connection successful')
+        print('Connection successful.')
         print(ap.ifconfig())
         del ap
         gc.collect()
 
-    del network, ssid, password, get_ssid, get_password, blink
+    del network, ssid, password, get_ssid, get_password
     gc.collect()

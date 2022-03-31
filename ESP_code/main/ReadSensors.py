@@ -1,7 +1,7 @@
 from machine import ADC, Pin
 import gc
 import time
-from Blink import blink
+from Blink import blink_error
 from FileManager import get_string_from_date
 from bme680 import BME680_I2C
 
@@ -14,8 +14,6 @@ soil_moisture_reset_counter = 0
 
 def read_soil_moisture():
     global soil_moisture_reset_counter
-    print('---------')
-    print('In soil moisture read')
 
     sensor_sum = 0
     if not soil_moisture_reset_counter >= 3:
@@ -34,8 +32,8 @@ def read_soil_moisture():
             time.sleep(5)
             read_soil_moisture()
     else:
-        print('Too many unsuccessful attempts. Check SM sensor connection')
-        blink(0.5, 4, True)  # Pulsing  2+2+2+2 times fast  - Sensor Error
+        print('Could not read soil moisture. Check SM sensor connection')
+        blink_error()
         return None
 
     dictionary = {
@@ -51,8 +49,6 @@ illumination_reset_counter = 0
 
 def read_illumination():
     global illumination_reset_counter
-    print('---------')
-    print('In illumination read')
 
     sensor_sum = 0
     if not illumination_reset_counter >= 3:
@@ -71,8 +67,8 @@ def read_illumination():
             time.sleep(5)
             read_illumination()
     else:
-        print('Too many unsuccessful attempts. Check Illumination sensor connection')
-        blink(0.5, 4, True)  # Pulsing  2+2+2+2 times fast  - Sensor Error
+        print('Could not read illumination. Check Illumination sensor connection')
+        blink_error()
         return None
 
     dictionary = {
@@ -110,13 +106,12 @@ def read_bme_sensor():
                 # gas = str(round(bme.gas / 1000, 2)) + ' KOhms'
 
         except OSError:
-            print('Failed to read sensor.')
             bme_reset_counter += 1
             time.sleep(5)
             read_bme_sensor()
     else:
-        print('Too many unsuccessful attempts. Check BME sensor connection')
-        blink(0.5, 4, True)  # Pulsing  2+2+2+2 times fast  - Sensor Error
+        print('Could not read BME. Check BME sensor connection')
+        blink_error()
         return None
 
     dictionary = {
@@ -133,11 +128,10 @@ def read_bme_sensor():
 
 
 def return_all_sensors():
+    from main.Blink import blink_check_sensors
+    blink_check_sensors()
     sm = read_soil_moisture()
-    print(sm)
     bme = read_bme_sensor()
-    print(bme)
     gc.collect()
     illumination = read_illumination()
-    print(illumination)
     return [sm, bme, illumination] if sm and bme and illumination else None

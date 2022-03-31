@@ -108,6 +108,8 @@ class MQTTClient:
         self.sock.write(b"\xc0\0")
 
     def publish(self, topic, msg, retain=False, qos=0):
+        from main.Blink import blink_mqtt_publish
+        blink_mqtt_publish()
         pkt = bytearray(b"\x30\0\0\0")
         pkt[0] |= qos << 1 | retain
         sz = 2 + len(topic) + len(msg)
@@ -138,6 +140,8 @@ class MQTTClient:
                     rcv_pid = self.sock.read(2)
                     rcv_pid = rcv_pid[0] << 8 | rcv_pid[1]
                     if pid == rcv_pid:
+                        from time import sleep
+                        sleep(0.5)
                         return
         elif qos == 2:
             assert 0
