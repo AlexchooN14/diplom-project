@@ -14,7 +14,7 @@ soil_moisture_reset_counter = 0
 
 def read_soil_moisture():
     global soil_moisture_reset_counter
-
+    print('---------')
     print('In soil moisture read')
 
     sensor_sum = 0
@@ -51,6 +51,7 @@ illumination_reset_counter = 0
 
 def read_illumination():
     global illumination_reset_counter
+    print('---------')
     print('In illumination read')
 
     sensor_sum = 0
@@ -88,8 +89,6 @@ bme_reset_counter = 0
 def read_bme_sensor():
     from machine import I2C
     gc.collect()
-    print('Memory in read bme')
-    print(gc.mem_free())
     print('---------')
     global bme_reset_counter
     print('In bme read')

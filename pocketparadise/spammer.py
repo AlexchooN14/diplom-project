@@ -4,7 +4,7 @@ import random
 import time
 import json
 
-from paho.mqtt import client as mqtt_client
+from pocketparadise import mqtt_client
 
 
 broker = 'localhost'

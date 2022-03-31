@@ -48,7 +48,7 @@ class UpdateAccountForm(FlaskForm):
 
 class ZoneForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired(), Length(max=40)])
-    watering_amount = IntegerRangeField('Irrigation amount per sq.m. per 24h')  # TODO check if that works
+    watering_amount = IntegerRangeField('Irrigation amount per sq.m. per 24h')
     source_flowrate = FloatField('Flow rate of water source', validators=[DataRequired()])
     area_size = FloatField('Physical area of zone in sq.m.', validators=[DataRequired()])
     algorithm = SelectField('Algorithm mode', choices=[('MOST', 'Highest Moisture - Trees, Vegetables'),

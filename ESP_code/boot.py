@@ -1,9 +1,6 @@
 import gc
 gc.enable()
 gc.collect()
-print('Initial Memory')
-print(gc.mem_free())
-print('---------')
 
 import esp
 import sys
@@ -24,13 +21,8 @@ from main.FileManager import get_mqtt_id
 if get_mqtt_id() is None:
     from main.MQTT import discovery
     discovery()
-print('After Discovery')
-print(gc.mem_free())
-print('---------')
+
 gc.collect()
-print('After Discovery gc collect')
-print(gc.mem_free())
-print('---------')
 
 from main.MQTT import normal_operation
 normal_operation()

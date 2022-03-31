@@ -62,12 +62,11 @@ class User(db.Model, UserMixin):
     last_name = db.Column(db.String(30), nullable=False)
 
     email = db.Column(db.String(120), unique=True, nullable=False)
-    # image_file = db.Column(db.String(35), nullable=True, default='')  # need to set default pics
     password = db.Column(db.String(60), nullable=False)
 
     created_at = db.Column(db.DateTime, nullable=False, unique=True, default=datetime.now())
     city_id = db.Column(db.Integer, db.ForeignKey('City.id'), nullable=False)
-    zones = db.relationship('Zone', backref='user')  # what lazy tag should I add
+    zones = db.relationship('Zone', backref='user')
 
     def __repr__(self):
         return f'{self.first_name} {self.last_name} from {self.city}'
@@ -75,15 +74,15 @@ class User(db.Model, UserMixin):
 class Device(db.Model):
     __tablename__ = "Device"
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    mac_address = db.Column(db.String(18), nullable=True)
+    mac_address = db.Column(db.String(18), nullable=False, unique=True)
     pp_uuid = db.Column(db.String(10), nullable=False, unique=True)
-    name = db.Column(db.String(40), nullable=False)
-    zone_id = db.Column(db.Integer, db.ForeignKey('Zone.id'), nullable=True)  # TODO Will it work?
-    actuator_present = db.Column(db.Boolean, nullable=True, default=False)
+    name = db.Column(db.String(40), nullable=True)
+    zone_id = db.Column(db.Integer, db.ForeignKey('Zone.id'), nullable=True)
+    actuator_present = db.Column(db.Boolean, nullable=False, default=False)
     readings = db.relationship('Reading', backref='device')
 
 
-ZonesPlants = db.Table('ZonesPlants',
+ZonesPlants = db.Table('ZonesPlants', db.Model.metadata,
     db.Column('zone_id', db.Integer, db.ForeignKey('Zone.id')),
     db.Column('plant_id', db.Integer, db.ForeignKey('Plant.id'))
 )
@@ -93,15 +92,15 @@ class Zone(db.Model):
     __tablename__ = "Zone"
     id = db.Column(db.Integer, primary_key=True, unique=True)
     name = db.Column(db.String(40), nullable=False)
-    devices = db.relationship('Device', backref='zone')  # what lazy tag should I add
+    devices = db.relationship('Device', backref='zone')
     city_id = db.Column(db.Integer, db.ForeignKey('City.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=False)
     source_flowrate = db.Column(db.Float, nullable=False)
     area_size = db.Column(db.Float, nullable=False)
     irrigation_method = db.Column(db.Enum(METHOD), nullable=False)
     watering_amount = db.Column(db.Enum(AMOUNT), nullable=True)
-    schedule = db.relationship('IrrigationSchedule', backref='zone', uselist=False)  # what lazy tag should I add
-    irrigation_data = db.relationship('IrrigationData', backref='zone')  # what lazy tag should I add
+    schedule = db.relationship('IrrigationSchedule', backref='zone', uselist=False)
+    irrigation_data = db.relationship('IrrigationData', backref='zone')
     plants = db.relationship('Plant', secondary=ZonesPlants, backref='zones')
 
 
@@ -121,8 +120,8 @@ class IrrigationSchedule(db.Model):
     __tablename__ = "Schedule"
     id = db.Column(db.Integer, primary_key=True, unique=True)
     zone_id = db.Column(db.Integer, db.ForeignKey('Zone.id'), unique=True, nullable=False)
-    start_time = db.Column(db.DateTime, nullable=False)
-    end_time = db.Column(db.DateTime, nullable=False)  # should it stay like this?
+    start_time = db.Column(db.Time, nullable=False)
+    end_time = db.Column(db.Time, nullable=False)
 
     def __repr__(self):
         return f'{self.start_time} - {self.end_time}'
@@ -139,7 +138,7 @@ class IrrigationData(db.Model):
 class Reading(db.Model):
     __tablename__ = "Reading"
     id = db.Column(db.Integer, primary_key=True, unique=True)
-    sensor_type = db.Column(db.Enum(SENSOR), nullable=False)  # TODO implement this in the code
+    sensor_type = db.Column(db.Enum(SENSOR), nullable=False)
     read_at = db.Column(db.DateTime, nullable=False)
     device_id = db.Column(db.ForeignKey('Device.id'), nullable=False)
     reading = db.Column(db.Float, nullable=False)

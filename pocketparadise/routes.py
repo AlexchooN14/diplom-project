@@ -1,10 +1,11 @@
 from flask import Response
 
 from pocketparadise import app, db, bcrypt, mail
-from pocketparadise.functionalities.mqtt_connect import connect_mqtt
+# from pocketparadise.functionalities.mqtt_connect import connect_mqtt
 from pocketparadise.functionalities.mqtt_discovery import discovery_subscribe
 from pocketparadise.functionalities.forecast import get_weather_forecast
-from pocketparadise.models import (Country, City, User, Zone, Plant, Device, IrrigationData, METHOD, AMOUNT)
+from pocketparadise.models import (Country, City, User, Zone, Plant, Device, IrrigationData, METHOD, AMOUNT,
+                                   ZonesPlants, IrrigationSchedule)
 from pocketparadise.forms import (RegistrationForm, LoginForm, UpdateAccountForm, ZoneForm)
 from flask_login import login_user, current_user, logout_user, login_required
 
@@ -75,33 +76,66 @@ def add_city():
             city_list.update({city.id: City.__repr__(city)})
         return city_list
 
-@app.route('/users', methods=['POST'])
-def create_user():
-    # setup_cities()
-    if not request.method == 'POST':
-        return abort(403)
-    elif current_user.is_authenticated:
-        return Response('You should Log out first...', 404)
-    data = request.get_json()
-    first_name = data.get('first_name')
-    last_name = data.get('last_name')
-    email = data.get('email')
-    user = User.query.filter_by(email=email).first()
-    if user:
-        return Response(f'User with that email already exists', 403)
-    password = data.get('password')
-    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+@app.route('/users', methods=['GET', 'POST', 'PUT'])
+def user():
+    if request.method == 'POST' or request.method == 'PUT':
+        data = request.get_json()
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+        email = data.get('email')
+        password = data.get('password')
+        city_name = data.get('city-name')
+    if request.method == 'POST':
+        if current_user.is_authenticated:
+            return Response('You should Log out first...', 404)
 
-    city_name = data.get('city-name')
+        user = User.query.filter_by(email=email).first()
+        if user:
+            return Response(f'User with that email already exists', 403)
 
-    if first_name and last_name and email and password and city_name:
-        city = City.query.filter_by(name=city_name).first_or_404()
-        user = User(first_name=first_name, last_name=last_name, email=email, password=hashed_password, city=city)
+        if first_name and last_name and email and password and city_name:
+            city = City.query.filter_by(name=city_name).first()
+            if not city:
+                return Response(f'Try with other city names. We didn\'t find this one', 404)
+            hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+            user = User(first_name=first_name, last_name=last_name, email=email, password=hashed_password, city=city)
+            db.session.add(user)
+            db.session.commit()
+            return Response(f'{first_name}\'s account was created successfully, Log In', 200)
+        else:
+            return Response('Missing submit data', 400)
+
+    elif request.method == 'GET':
+        if not current_user.is_authenticated:
+            return Response('You can\'t view your information without logging in...', 404)
+        user = User.query.get_or_404(current_user.id)
+        user_dict = {
+            "firstname": user.first_name,
+            "lastname": user.last_name,
+            "email": user.email,
+            "password": user.password,
+            "city": user.city.name
+        }
+        return jsonify(user_dict)
+    elif request.method == 'PUT':
+        if not current_user.is_authenticated:
+            return Response('You can\'t edit your information without logging in...', 404)
+        user = User.query.get_or_404(current_user.id)
+        if first_name:
+            user.first_name = first_name
+        if last_name:
+            user.first_name = last_name
+        if city_name:
+            new_city = City.query.filter_by(name=city_name).first()
+            if new_city:
+                user.city = new_city
+            else:
+                return Response(f'Try with other city names. We didn\'t find this one', 404)
+        db.session.commit()
+        return Response(f'Your information has been updated! Check it via GET method.', 404)
     else:
-        return Response('Missing submit data', 400)
-    db.session.add(user)
-    db.session.commit()
-    return Response(f'{first_name}\'s account was created successfully, Log In', 200)
+        return abort(403)
+
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -123,54 +157,101 @@ def login():
         return Response('Missing submit data.', 400)
 
 @app.route('/logout')
+@login_required
 def logout():
     logout_user()
     return Response('You logged out. Bye for now.', 200)
 
-@app.route('/users/<int:user_id>')
+@app.route('/zones', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @login_required
-def user(user_id):
-    if not request.method == 'GET':
-        return abort(403)
-    user = User.query.get_or_404(user_id)
-    user_dict = {
-        "firstname": user.first_name,
-        "lastname": user.last_name,
-        "email": user.email,
-        "password": user.password,
-        "city": user.city.name
-    }
-    return jsonify(user_dict)
+def zones():
+    # name, city, user, source_flowrate, area_size, irrigation_method, watering_amount
+    if request.method == 'POST' or request.method == 'PUT' or request.method == 'DELETE':
+        data = request.get_json()
+        name = data.get('name')
+        city_name = data.get('city-name')
+        if city_name:
+            city = City.query.filter_by(name=city_name).first_or_404()
+        source_flowrate = data.get('source-flowrate')
+        area_size = data.get('area-size')
+        irrigation_method = data.get('irrigation-method')  # METHOD
+        watering_amount = data.get('watering-amount')  # AMOUNT
+        print(f'irrigation_method: {irrigation_method}')
+        print(f'watering_amount: {watering_amount}')
 
+        if request.method == 'POST':
+            if name and city_name and source_flowrate\
+                    and area_size and irrigation_method and watering_amount:
+                zone = Zone.query.filter_by(name=name, user=current_user).first()
+                if not zone:
+                    zone = Zone(name=name, city=city, user=current_user, source_flowrate=source_flowrate,
+                                area_size=area_size, irrigation_method=irrigation_method,
+                                watering_amount=watering_amount)
+                    db.session.add(zone)
+                    db.session.commit()
+                    return Response(f'{name} zone created successfully! Try and add a device.', 200)
+                else:
+                    return Response('You have a zone with the same name. Change it up a little.', 400)
+            else:
+                return Response('Missing submit data', 400)
 
-@app.route('/zones', methods=['POST'])
-@login_required
-def create_zone():
-    # name, city, preferred_watering_amount, user, source_flowrate, area_size, irrigation_method, watering_amount
-    data = request.get_json()
-    name = data.get('name')
-    city_name = data.get('city-name')
-    city = City.query.filter_by(name=city_name).first_or_404()
-    source_flowrate = data.get('source-flowrate')
-    area_size = data.get('area-size')
-    irrigation_method = data.get('irrigation-method')  # METHOD
-    watering_amount = data.get('watering-amount')  # AMOUNT
-    print(f'irrigation_method: {irrigation_method}')
-    print(f'watering_amount: {watering_amount}')
-    method_name = METHOD(irrigation_method).name
-    print(type(method_name))
-    print(method_name)
-    if name and city_name and source_flowrate\
-            and area_size and irrigation_method and watering_amount:
+        elif request.method == 'PUT':
+            new_name = data.get('new-name')
+            zone = None
+            if name:
+                zone = Zone.query.filter_by(user=current_user, name=name)
+                if zone:
+                    if new_name:
+                        zone.name = new_name
+                    if city_name:
+                        new_city = City.query.filter_by(name=city_name)
+                        if new_city:
+                            zone.city = new_city
+                        else:
+                            return Response(f'We don\'t support the city {city_name} yet..', 400)
+                    if source_flowrate:
+                        zone.source_flowrate = source_flowrate
+                    if area_size:
+                        zone.area_size = area_size
+                    if irrigation_method:
+                        zone.irrigation_method = irrigation_method
+                    if watering_amount:
+                        zone.watering_amount = watering_amount
+                    db.session.commit()
+                    return Response(f'Data for {zone.name} changed', 200)
+                else:
+                    return Response('Sadly you dont have such zone. Go create one with POST on /zones', 400)
+            else:
+                return Response('Missing submit data', 400)
 
-        zone = Zone(name=name, city=city, user=current_user, source_flowrate=source_flowrate,
-                    area_size=area_size, irrigation_method=irrigation_method,
-                    watering_amount=watering_amount)
+        elif request.method == 'DELETE':
+            zone = Zone.query.filter_by(user=current_user, name=name).first_or_404()
+            db.session.remove(zone)
+            db.session.commit()
+            return Response(f'You successfully removed {name} zone. Don\'t be late to create a new one.', 200)
+
+    elif request.method == 'GET':
+        zones = Zone.query.filter_by(user=current_user).all()
+        if zones:
+            l = []
+            #  irrigation_method, watering_amount
+            for zone in zones:
+                zones_dict = {
+                    "name": zone.name,
+                    "area-size": zone.area_size,
+                    "city-name": zone.city.name,
+                    "belongs-to": zone.user.first_name + ' ' + zone.user.last_name,
+                    "source-flowrate": zone.source_flowrate,
+                    "irrigation-method": zone.irrigation_method.name,
+                    "watering-amount": zone.watering_amount.name
+                }
+                l.append(zones_dict)
+            return jsonify(l)
+        else:
+            return Response(f'Currently you do not have any zones. Why not create one?', 200)
+
     else:
-        return Response('Missing submit data', 400)
-    db.session.add(zone)
-    db.session.commit()
-    return Response(f'{name} zone created successfully! Try and add a device.', 200)
+        return abort(403)
 
 @app.route('/zones/<int:zone_id>')
 @login_required
@@ -181,57 +262,119 @@ def zone(zone_id):
     zone = Zone.query.get_or_404(zone_id)
     if zone.user == current_user:
         zone_dict = {
-            "name": zone.name,
-            "city": zone.city.name,
-            "user": zone.user.first_name + ' ' + zone.user.last_name,
-            "source-flowrate": zone.source_flowrate,
+            "name": zone.first_name,
             "area-size": zone.area_size,
+            "city-name": zone.city.name,
+            "belongs-to": zone.user.first_name + ' ' + zone.user.last_name,
+            "source-flowrate": zone.source_flowrate,
             "irrigation-method": zone.irrigation_method.name,
             "watering-amount": zone.watering_amount.name
         }
         return jsonify(zone_dict)
 
-def is_uuid_authentic(uuid):
-    import json
-    with open('pocketparadise/functionalities/uuid.json', 'r') as file:
-        set = json.load(file)
-        return uuid in set
 
-@app.route('/devices', methods=['POST'])
+# @app.route('/devices', methods=['POST'])
+# @login_required
+# def device_create():
+#     # mac_adress - Nullable, pp_uuid, name, zone - nullable, actuator_present - Nullable
+#     data = request.get_json()
+#     name = data.get('name')
+#     pp_uuid = data.get('pp-uuid')
+#     actuator_present = data.get('actuator-present')
+#     zone_name = data.get('zone-name')
+#     if pp_uuid and name and zone_name:
+#         zone = Zone.query.filter_by(user=current_user, name=zone_name).first()
+#         if not zone:
+#             return Response('You don\'t have a zone with this name. Check your zones and try again.')
+#         if is_uuid_authentic(pp_uuid):
+#             if Device.query.filter_by(pp_uuid=pp_uuid).first():
+#                 return Response(f'Device with this pp-uuid was already created. Go setup your physical one', 400)
+#             device = Device(pp_uuid=pp_uuid, name=name, zone=zone,
+#                             actuator_present=bool(actuator_present) if actuator_present else False)
+#             db.session.add(device)
+#             db.session.commit()
+#             return Response(f'Your device "{name}" was created! Go setup your physical one and connect it with zone', 200)
+#         else:
+#             return Response('UUID is not valid', 400)
+#     else:
+#         return Response('Missing submit data', 400)
+
+@app.route('/devices', methods=['GET', 'PUT'])
 @login_required
-def device_create():
-    # mac_adress - Nullable, pp_uuid, name, zone - nullable, actuator_present - Nullable
-    data = request.get_json()
-    name = data.get('name')
-    pp_uuid = data.get('pp-uuid')
-    actuator_present = data.get('actuator-present')
-    if pp_uuid and name:
-        if is_uuid_authentic(pp_uuid):
-            if Device.query.filter_by(pp_uuid=pp_uuid).first():
-                return Response(f'Device with this pp-uuid was already created. Go setup your physical one', 400)
-            device = Device(pp_uuid=pp_uuid, name=name,
-                            actuator_present=actuator_present if actuator_present else False)
-            db.session.add(device)
-            db.session.commit()
-            return Response(f'Your device "{name}" was created! Go setup your physical one and connect it with zone', 200)
+def device():
+    if request.method == 'GET':
+        if request.data:
+            # GET specific device
+            data = request.get_json()
+            name = data.get('name')
+            zones = Zone.query.filter_by(user=current_user).all()
+            for zone in zones:
+                device = Device.query.filter_by(name=name, zone=zone).first()
+                if device:
+                    device_dict = {
+                        "mqtt-id": device.id,
+                        "mac-address": device.mac_address,
+                        "pp-uuid": device.pp_uuid,
+                        "device-name": device.name,
+                        "zone-name": device.zone.name,
+                        "actuator": device.actuator_present
+                    }
+                    return jsonify(device_dict)
+            return Response('Such device was not found in any of your zones. This doesn\'t stop you to create one '
+                            'though.')
+
         else:
-            return Response('UUID is not valid', 400)
+            # GET all devices
+            zones = Zone.query.filter_by(user=current_user).all()
+            return_list = []
+            for zone in zones:
+                devices = Device.query.filter_by(zone=zone).all()
+                for device in devices:
+                    device_dict = {
+                        "mqtt-id": device.id,
+                        "mac-address": device.mac_address,
+                        "pp-uuid": device.pp_uuid,
+                        "device-name": device.name,
+                        "zone-name": device.zone.name,
+                        "actuator": device.actuator_present
+                    }
+                    l = []
+                    for reading in device.readings:
+                        readings_dict = {
+                            "sensor": reading.sensor_type,
+                            "read-at": reading.read_at,
+                            "reading": reading.reading
+                        }
+                        l.append(readings_dict)
+                    device_dict.update({"readings": l})
+                    return_list.append(device_dict)
+            return jsonify(return_list)
+    elif request.method == 'PUT':
+        if request.data:
+            data = request.get_json()
+            device_name = data.get('device-name')
+            zone_name = data.get('zone-name')
+            zone = Zone.query.filter_by(name=zone_name).first_or_404()
+            device = Device.query.filter_by(name=device_name).first_or_404()
+            zone.devices.append(device)
+            db.session.commit()
+            return Response(f'You successfully connected {device_name} device with {zone_name} zone. Time to start irrigating!', 400)
+        else:
+            return Response('Missing submit data', 400)
     else:
-        return Response('Missing submit data', 400)
-
-
-@app.route('/plants', methods=['GET', 'POST'])
-def add_plant():
-    if not request.method == 'POST' and not request.method == 'GET':
         return abort(403)
+
+
+@app.route('/plants', methods=['GET', 'POST', 'PUT'])
+@login_required
+def plants():
     if request.method == 'POST':
         data = request.get_json()
-        name = data['name']
-        humidity_preference = data['h-preference']
-        sunlight_preference = data['l-preference']
-        temperature_preference = data['t-preference']
-        if Plant.query.filter_by(name=name, humidity_preference=humidity_preference,
-                 sunlight_preference=sunlight_preference, temperature_preference=temperature_preference).first():
+        name = data.get('name')
+        humidity_preference = data.get('h-preference')
+        sunlight_preference = data.get('l-preference')
+        temperature_preference = data.get('t-preference')
+        if Plant.query.filter_by(name=name).first():
             return Response('Such plant already exists. Go and add it in your zone', 400)
         plant = Plant(name=name, humidity_preference=humidity_preference,
                       sunlight_preference=sunlight_preference, temperature_preference=temperature_preference)
@@ -240,17 +383,196 @@ def add_plant():
         return Response(f'Plant with name {name} added', 201)
     elif request.method == 'GET':
         plants = Plant.query.all()
-        plant_list = {}
-        for plant in plants:
-            plant_list.update({plant.id: Plant.__repr__(plant)})
-        return plant_list
-
-@app.route('/zones/<int:zone_id>/plants', methods=['PUT'])
-def add_plant(zone_id, plant_id):
-    if not request.method == 'PUT':
+        if plants:
+            l = []
+            for plant in plants:
+                plants_dict = {
+                    "name": plant.name,
+                    "humidity-preference": plant.humidity_preference.name,
+                    "sunlight-preference": plant.sunlight_preference.name,
+                    "temperature-preference": plant.temperature_preference.name,
+                }
+                l.append(plants_dict)
+            return jsonify(l)
+    elif request.method == 'PUT':
+        data = request.get_json()
+        name = data.get('name')
+        humidity_preference = data.get('h-preference')
+        sunlight_preference = data.get('l-preference')
+        temperature_preference = data.get('t-preference')
+        if name:
+            plant = Plant.query.filter_by(name=name).first()
+            if plant:
+                if humidity_preference:
+                    plant.humidity_preference = humidity_preference
+                if sunlight_preference:
+                    plant.sunlight_preference = sunlight_preference
+                if temperature_preference:
+                    plant.temperature_preference = temperature_preference
+                db.session.commit(plant)
+                return Response(f'Data for {plant.name} changed', 200)
+            else:
+                return Response('There is no such plant. You can create it with POST request', 403)
+        else:
+            return Response('Missing submit data', 400)
+    else:
         return abort(403)
 
+@app.route('/zones/plants', methods=['PUT'])
+@login_required
+def zone_plant():
+    if not request.method == 'PUT':
+        return abort(403)
+    data = request.get_json()
+    zone_name = data.get('zone-name')
+    plant_name = data.get('plant-name')
+    zone = Zone.query.filter_by(user=current_user, name=zone_name).first()
+    plant = Plant.query.filter_by(name=plant_name).first()
+    if zone and plant:
+        zone.plants.append(plant)
+        db.session.commit()
+        return Response(f'{plant.name} added to zone {zone.name}. Nice job!', 200)
+    else:
+        return Response(f'Either zone or plant does not exist. Check twice next time!', 404)
 
+@app.route('/schedule', methods=['GET', 'POST', 'PUT'])
+@login_required
+def schedule():
+    if request.data:
+        data = request.get_json()
+    else:
+        return Response('Missing submit data..')
+    if request.method == 'GET':
+        zone_name = data.get('zone-name')
+        if zone_name:
+            zone = Zone.query.filter_by(name=zone_name).first()
+            if zone:
+                schedule = IrrigationSchedule.query.filter_by(zone=zone).first()
+                if schedule:
+                    schedule_dict = {
+                        "start-time": schedule.start_time,
+                        "end-time": schedule.end_time
+                    }
+                    return jsonify(schedule_dict)
+                else:
+                    return Response('Sadly this zone does not have a schedule yet. Hurry up and add one.', 400)
+            else:
+                return Response('There is no such zone. You can create it with POST request on /zones', 400)
+        else:
+            return Response('You should submit a zone name to get it\'s schedule. Go ahead..')
+
+    elif request.method == 'POST' or request.method == 'PUT':
+        zone_name = data.get('zone-name')
+        start_time = data.get('start-time')
+        end_time = data.get('end-time')
+        if zone_name and start_time and end_time:
+            zone = Zone.query.filter_by(name=zone_name).first()
+            if zone:
+                if request.method == 'POST':
+                    schedule = IrrigationSchedule(start_time=start_time, end_time=end_time, zone=zone)
+                    db.session.add(schedule)
+                    db.session.commit()
+                    return Response(f'Okay. Zone schedule was set to {start_time}-{end_time}', 200)
+                elif request.method == 'PUT':
+                    schedule = IrrigationSchedule.query.filter_by(zone=zone).first()
+                    if schedule:
+                        schedule.start_time = start_time
+                        schedule.end_time = end_time
+                        db.session.commit()
+                        return Response(f'You changed {zone_name} zone schedule to {start_time}-{end_time}.', 200)
+                    else:
+                        return Response('Sadly this zone does not have a schedule yet. Hurry up and add one.', 400)
+            else:
+                return Response('There is no such zone. You can create it with POST request on /zones', 400)
+    else:
+        return abort(403)
+
+@app.route('/readings')
+@login_required
+def readings():
+    if not request.method == 'GET':
+        return abort(403)
+    if request.data:
+        data = request.get_json()
+    else:
+        return Response('To get sensor readings provide either zone name or device name.')
+    device_name = data.get('device-name')
+    zone_name = data.get('zone-name')
+    if device_name:
+        device = Device.query.filter_by(name=device_name).first()
+        if device:
+            readings = device.readings
+            l = []
+            for reading in readings:
+                readings_dict = {
+                    "sensor-type": reading.sensor_type,
+                    "read-at": reading.read_at,
+                    "reading": reading.reading
+                }
+                l.append(readings_dict)
+            return jsonify(l)
+        else:
+            return Response('There is no such device. You can create it with POST request on /devices', 400)
+    elif zone_name:
+        zone = Zone.query.filter_by(name=zone_name).first()
+        if zone:
+            devices = zone.devices
+            d = {}
+            for device in devices:
+                l = []
+                for reading in device.readings:
+                    readings_dict = {
+                        "sensor-type": reading.sensor_type,
+                        "read-at": reading.read_at,
+                        "reading": reading.reading
+                    }
+                    l.append(readings_dict)
+                d.update({device.name: l})
+            return jsonify(d)
+        else:
+            return Response('There is no such zone. You can create it with POST request on /zones', 400)
+
+@app.route('/irrigations')
+@login_required
+def irrigations():
+    if request.method == 'GET':
+        if request.data:
+            data = request.get_json()
+            zone_name = data.get('zone-name')
+            if zone_name:
+                zone = Zone.query.filter_by(name=zone_name).first()
+                if zone:
+                    l = []
+                    irrigations = zone.irrigation_data
+                    for irrigation in irrigations:
+                        irrigation_dict = {
+                            "began": irrigation.at,
+                            "duration": irrigation.duration
+                        }
+                        l.append(irrigation_dict)
+                    return jsonify(l)
+                else:
+                    return Response('There is no such zone. You can create it with POST request on /zones', 400)
+            else:
+                return Response('You should submit zone name to get its irrigations. Try again.', 400)
+        else:
+            zones = Zone.query.filter_by(user=current_user).all()
+            if zones:
+                d = {}
+                for zone in zones:
+                    l = []
+                    for irrigation in zone.irrigation_data:
+                        irrigation_dict = {
+                            "began": irrigation.at,
+                            "duration": irrigation.duration
+                        }
+                        l.append(irrigation_dict)
+                    d.update({zone.name: l})
+                    return jsonify(d)
+            else:
+                return Response('Currently you don\'t have any zones. Go create one and see what happens.', 400)
+    else:
+        return abort(403)
 
 # @app.route('/mqtt')
 # def mqtt():

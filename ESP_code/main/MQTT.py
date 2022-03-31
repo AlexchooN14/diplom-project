@@ -8,7 +8,7 @@ from Blink import blink
 
 gc.collect()
 
-mqtt_server = '192.168.1.7'
+mqtt_server = '192.168.1.47'
 username = 'sasho'
 password = 'A1403lex'
 client_id = ubinascii.hexlify(unique_id())
@@ -222,14 +222,14 @@ def normal_operation():
         print('There are ' + str(remaining_seconds) + ' seconds remaining till next irrigation')
         if remaining_seconds > 0:
             if remaining_seconds < wakeup_interval:
-                # TODO sleep for remaining seconds
+                # sleep for remaining seconds
                 print('Im awake, but Im going to sleep for ' + str(remaining_seconds) + ' seconds')
                 message_checker_bool = False
                 sleep(5)
                 gc.collect()
                 deepsleep(int(remaining_seconds) * 1000)
             else:
-                # TODO sleep for wakeup_interval seconds
+                # sleep for wakeup_interval seconds
                 print('Im awake, but Im going to sleep for ' + str(wakeup_interval) + ' wakeup interval')
                 message_checker_bool = False
                 sleep(5)
