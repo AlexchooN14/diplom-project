@@ -28,11 +28,11 @@
 #### 📈 During my progress I will
 - [ ] 💿 Create a database to store all data
 - [ ] 📡 Realize an MQTT communication between the server and a potential device
-- [ ] 🧮 Create an algorithm and test it with mock data
+- [ ] 🧮 Create an irrigation decision algorithm and test it with mock data
 - [ ] 📟 Create the hardware device
-- [ ] 🌐 Implement device's WPS connection to the home internet
+- [ ] 🌐 Implement device's socket server in AP Wi-Fi mode for home internet data submit
 - [ ] 📡 Test MQTT communication with the hardware device
 - [ ] 🔎 Implement all topics from topic tree diagram, including all json files
 - [ ] ✔️Create Automatic Tests
-- [ ] 🌐 Create the routes, forms, admin panel
+- [ ] 🌐 Create the REST API endpoints
 - [ ] 📃 Describe everything done in a documentation file
